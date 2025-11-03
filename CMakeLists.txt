@@ -19,8 +19,16 @@ if(APPLE)
     endif()
 endif()
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(SDL2 REQUIRED sdl2)
+if(WIN32)
+    include_directories(${SDL2_INCLUDE_DIR})
+    link_directories(${SDL2_LIB_DIR})
+
+    set(SDL2_LIBS SDL2 SDL2main)
+
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SDL2 REQUIRED sdl2)
+endif()
 
 add_subdirectory(src)
 

@@ -11,4 +11,8 @@ target_include_directories(nes_emu
 )
 
 target_compile_options(nes_emu PRIVATE ${SDL2_CFLAGS_OTHER})
-target_link_libraries(nes_emu PRIVATE ${SDL2_LINK_LIBRARIES})
+if(WIN32)
+    target_link_libraries(nes_emu PRIVATE ${SDL2_LIBS})
+else()
+    target_link_libraries(nes_emu PRIVATE ${SDL2_LIBRARIES})
+endif()
