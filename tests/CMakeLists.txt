@@ -1,1 +1,18 @@
+
+find_package(GTest CONFIG REQUIRED)
+
+
+add_executable(opcode_tests
+        cpu/opcode_tests.cpp
+)
+
+target_link_libraries(opcode_tests
+        PRIVATE
+        nes_lib
+        GTest::gtest_main
+)
+
+include(GoogleTest)
+gtest_discover_tests(opcode_tests)
+
 add_executable(tests test_sanity.cpp)
