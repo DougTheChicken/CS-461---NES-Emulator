@@ -37,11 +37,14 @@ PowerShell:
 cd C:\
 git clone https://github.com/microsoft/vcpkg.git
 C:\vcpkg\bootstrap-vcpkg.bat
-C:\vcpkg\vcpkg install sdl2:x64-windows
+C:\vcpkg\vcpkg install sdl2:x64-windows gtest:x64-windows
 C:\vcpkg\vcpkg integrate install
 Switch to local project directory
 choco install -y cmake
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+cmake -S . -B build `
+  -G "Visual Studio 17 2022" -A x64 `
+  -DBUILD_TESTING=ON `
+  -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
 cmake --build build --config Release
 ./build/src/Release/nes_emu.exe
 ./build/tests/Release/tests.exe
