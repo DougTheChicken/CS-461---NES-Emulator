@@ -10,23 +10,34 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(GTest CONFIG REQUIRED)
 
 # ---- SDL2: prefer CONFIG, fallback to pkg-config ----
-set(SDL2_MODE "")
-find_package(SDL2 CONFIG QUIET)
-if (SDL2_FOUND)
-    set(SDL2_MODE "CONFIG")  # provides SDL2::SDL2, SDL2::SDL2main (on Windows)
-else()
+set(_SDL2_TARGET "")
+if (TARGET SDL2::SDL2)
+    set(_SDL2_TARGET SDL2::SDL2)
+elseif (TARGET SDL2::SDL2-static)
+    set(_SDL2_TARGET SDL2::SDL2-static)
+endif()
+
+if (NOT _SDL2_TARGET)
+    # Try the CMake module (FindSDL2). Some distros only expose variables.
+    find_package(SDL2 QUIET)  # module mode
+    if (TARGET SDL2::SDL2)
+        set(_SDL2_TARGET SDL2::SDL2)
+    elseif (SDL2_FOUND AND SDL2_INCLUDE_DIRS AND SDL2_LIBRARIES)
+        add_library(SDL2::SDL2 INTERFACE IMPORTED)
+        target_include_directories(SDL2::SDL2 INTERFACE ${SDL2_INCLUDE_DIRS})
+        target_link_libraries(SDL2::SDL2 INTERFACE ${SDL2_LIBRARIES})
+        set(_SDL2_TARGET SDL2::SDL2)
+    endif()
+endif()
+
+if (NOT _SDL2_TARGET)
+    # Fallback: pkg-config
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(SDL2 REQUIRED sdl2)
-    set(SDL2_MODE "PKG")
-    # Create a compatible imported target so the rest of the file is uniform.
     add_library(SDL2::SDL2 INTERFACE IMPORTED)
     target_include_directories(SDL2::SDL2 INTERFACE ${SDL2_INCLUDE_DIRS})
-    target_link_libraries(SDL2::SDL2 INTERFACE ${SDL2_LIBRARIES})
-    if (WIN32 AND SDL2_LINK_LIBRARIES)
-        # If pkg-config exposes SDL2main too
-        add_library(SDL2::SDL2main INTERFACE IMPORTED)
-        target_link_libraries(SDL2::SDL2main INTERFACE SDL2main)
-    endif()
+    target_link_libraries(SDL2::SDL2 INTERFACE ${SDL2_LINK_LIBRARIES})
+    set(_SDL2_TARGET SDL2::SDL2)
 endif()
 message(STATUS "SDL2 mode: ${SDL2_MODE}")
 
