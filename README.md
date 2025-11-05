@@ -14,7 +14,7 @@ Proves our toolchain, repo health, and collaboration for Progress Report #1.
 
 ### macOS
 ```bash
-brew install sdl2 cmake
+brew install sdl2 cmake googletest
 make build
 make run
 make test
@@ -22,7 +22,10 @@ make test
 
 ### Ubuntu/Debian
 ```bash
-sudo apt-get update && sudo apt-get install -y libsdl2-dev cmake g++
+sudo apt-get update && sudo apt-get install -y libsdl2-dev cmake g++ libgtest-dev libgmock-dev
+sudo cmake -S /usr/src/googletest -B /tmp/build-gtest
+sudo cmake --build /tmp/build-gtest --config Release
+sudo cmake --install /tmp/build-gtest
 make build
 make run
 make test
