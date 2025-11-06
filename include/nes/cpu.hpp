@@ -1,3 +1,4 @@
 #pragma once
 #include <cstdint>
-namespace nes { class CPU { public: void reset() {} void step() {} }; }
+#include <string>
+namespace nes { class CPU { public: void reset(); void step(); std::string lookupInstruction(int); }; }
