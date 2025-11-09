@@ -12,6 +12,7 @@ class console;
 class component
 {
 public:
+    virtual ~component() = default;
     // Mandatory component pure virtual functions to be implemented by all components
     virtual void start(console *sys) = 0;
     virtual void reset() = 0;
