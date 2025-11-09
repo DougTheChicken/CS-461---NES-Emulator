@@ -64,7 +64,12 @@ target_include_directories(nes_lib
 )
 
 # ---- Executable with main.cpp; link SDL only here ----
-add_executable(nes_emu ${PROJECT_SOURCE_DIR}/src/main.cpp)
+add_executable(nes_emu ${PROJECT_SOURCE_DIR}/src/main.cpp
+        include/nes/ppu.hpp
+        include/nes/component.hpp
+        include/nes/timing.hpp
+        include/nes/apu.hpp
+)
 target_link_libraries(nes_emu PRIVATE nes_lib SDL2::SDL2)
 
 if (WIN32)
