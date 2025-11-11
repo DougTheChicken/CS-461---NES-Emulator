@@ -1,29 +1,27 @@
 #pragma once
+#include <cstdint>
 #include <cstddef>
+#include <vector>
+#include <string>
 
 namespace nes {
     class ROM {
-        public:
-            ROM();
-            ~ROM();
+    public:
+        bool load_from_file(const char* path);
 
-            bool load_from_file(const char* filepath);
-            const char* get_data() const;
-            size_t get_size() const;
+        std::size_t     prg_size_bytes() const;
+        const uint8_t*  prg_data() const;
 
-        private:
-            // Header fields (will likely need accessors at some point) (might need to be broken down further for mappers)
-            char PRG_ROM_size; // Size of PRG ROM in 16KB units
-            char CHR_ROM_size; // Size of CHR ROM in 8KB units
-            char flags6;      // Mapper, mirroring, battery, trainer
-            char flags7;      // Mapper, VS/Playchoice, NES 2.0
-            char flags8;      // PRG-RAM size (rarely used extension)
-            char flags9;      // TV system (rarely used extension)
-            char flags10;     // TV system, PRG-RAM presence (rarely used extension)
+        uint8_t mapper() const { return mapper_id; }
+        int     prg_banks() const { return PRG_ROM_size; }
+        int     chr_banks() const { return CHR_ROM_size; }
 
-            // Data fields
-            char* ROM_data;
-            size_t ROM_size;
-            char* filepath;
+    private:
+        int PRG_ROM_size = 0;   // 16KB units
+        int CHR_ROM_size = 0;   // 8KB units
+        uint8_t mapper_id = 0;
+
+        // PRG then CHR (trainer skipped if present)
+        std::vector<uint8_t> ROM_data;
     };
 }

@@ -1,33 +1,23 @@
-// console is a top-level implementation of the entire NES
-// this is where ROMs are load, system-wide reset happens
 #pragma once
+#include <cstdint>
+#include "nes/timing.hpp"   // cycle_t is defined in the global namespace here
+#include "nes/cpu.hpp"
+#include "nes/ROM.hpp"
+#include "nes/mem.hpp"
 
-#include "cpu.hpp"
-#include "timing.hpp"
-#include "apu.hpp"
-#include "ppu.hpp"
-#include "ROM.hpp"
+class console {
+public:
+    console();
+    ~console();
 
-class console
-{
-    public:
-        console();
-        ~console();
+    bool load_rom(char* filepath);
+    void run_rom();                 // headless smoke test
+    void step(cycle_t stepcount);   // use ::cycle_t (global)
+    void init();
 
-        void start();
-        void stop();
-        void reset();
-        bool load_rom(char* filepath);
-        void run_rom();
-        void step(cycle_t stepcount);
-
-        void test();
-        void init();
-    
-    private:
-        nes::ROM rom;
-        unsigned long long master_cycle_count;
-        nes::CPU cpu;
-        nes::PPU ppu;
-        nes::APU apu;
+private:
+    nes::ROM  rom;
+    Memory    mem;
+    unsigned long long master_cycle_count = 0;
+    nes::CPU  cpu;
 };
