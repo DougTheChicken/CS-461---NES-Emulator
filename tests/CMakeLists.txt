@@ -12,6 +12,11 @@ target_link_libraries(opcode_tests
         GTest::gtest_main
 )
 
+# wherever you define nes_lib (or your main target)
+target_include_directories(nes_lib PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 include(GoogleTest)
 gtest_discover_tests(opcode_tests)
 
