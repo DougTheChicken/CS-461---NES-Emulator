@@ -29,6 +29,12 @@ uint8_t Memory::read(uint16_t addr) {
                 }
                 return val;
             }
+            case 0x2004: {
+                return 0x00;
+            }
+            case 0x2007: {
+                return 0x00;
+            }
             default:
                 return 0x00; // other PPU regs unimplemented
         }
@@ -53,6 +59,35 @@ void Memory::write(uint16_t addr, uint8_t data) {
 
     // $2000–$3FFF: PPU regs mirrored; ignore writes for now
     if (addr >= 0x2000 && addr <= 0x3FFF) {
+        switch (addr & 0x0007) {
+        case 0: // $2000 PPUCTRL
+            ppu_ctrl = data;
+            // TODO: Trigger NMI logic if bit 7 changes?
+            break;
+        case 1: // $2001 PPUMASK
+            ppu_mask = data;
+            break;
+        case 2: // $2002 PPUSTATUS
+            // READ ONLY: Writing to status usually does nothing
+            break;
+        case 3: // $2003 OAMADDR
+            oam_addr = data;
+            break;
+        case 4: // $2004 OAMDATA
+            // TODO: Write to OAM memory at oam_addr
+            break;
+        case 5: // $2005 PPUSCROLL
+            ppu_scroll = data;
+            // Note: Real hardware requires a 'write toggle' here (x/y split)
+            break;
+        case 6: // $2006 PPUADDR
+            ppu_addr = data;
+            // Note: Real hardware requires a 'write toggle' here (high/low byte)
+            break;
+        case 7: // $2007 PPUDATA
+            // TODO: Write data to VRAM at ppu_addr, then increment ppu_addr
+            break;
+        }
         return;
     }
 
