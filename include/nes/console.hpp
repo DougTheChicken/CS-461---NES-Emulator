@@ -1,4 +1,5 @@
 #pragma once
+
 #include <cstdint>
 #include "nes/timing.hpp"   // cycle_t is defined in the global namespace here
 #include "nes/cpu.hpp"
