@@ -8,19 +8,31 @@ class Memory;
 namespace nes {
     class CPU {
     public:
+        // constructor runs initialization to known state
+        CPU();
+
         void attach_memory(Memory* m) { mem = m; }
+
+        // Reset should also re-init to known state
         void reset();
+
         void step_to(cycle_t ppu_target);
         void step();
 
         uint16_t pc() const { return PC; }
         uint8_t  a()  const { return A;  }
+        uint8_t  x()  const { return X;  }
+        uint8_t  y()  const { return Y;  }
+        uint8_t  p()  const { return P;  }
 
         std::string lookupInstruction(int);
 
     private:
+        // single source of truth for initial/reset state
+        void init_state();
+
         // Registers
-        uint16_t PC = 0x8000;
+        uint16_t PC = 0x0000;   // PC is loaded from reset vector in init_state()
         uint8_t  A = 0, X = 0, Y = 0;
         uint8_t  S = 0xFD;      // stack pointer
         uint8_t  P = 0x24;      // NV-BDIZC

@@ -22,7 +22,8 @@ bool console::load_rom(char* filepath) {
 
     uint16_t reset = static_cast<uint16_t>(mem.read(0xFFFC)) |
                      (static_cast<uint16_t>(mem.read(0xFFFD)) << 8);
-    std::fprintf(stderr, "[console] ResetVector=$%04X  FirstOpcode=$%02X\n", reset, mem.read(reset));
+    std::fprintf(stderr, "[console] ResetVector=$%04X  FirstOpcode=$%02X\n",
+                 (unsigned)reset, (unsigned)mem.read(reset));
     return true;
 }
 
@@ -30,8 +31,17 @@ void console::run_rom() {
     for (int i = 0; i < 200000; ++i) {
         cpu.step_to(master_cycle_count + 3); // advance ~1 CPU boundary (3 PPU)
         master_cycle_count += 3;
+
         if ((i % 5000) == 0) {
-            std::fprintf(stderr, "RUN i=%d  PC=%04X A=%02X X=%02X Y=%02X P=%02X\n", i, cpu.pc(), cpu.a());
+            std::fprintf(stderr,
+                "RUN i=%d  PC=%04X A=%02X X=%02X Y=%02X P=%02X\n",
+                i,
+                (unsigned)cpu.pc(),
+                (unsigned)cpu.a(),
+                (unsigned)cpu.x(),
+                (unsigned)cpu.y(),
+                (unsigned)cpu.p()
+            );
         }
     }
 }
