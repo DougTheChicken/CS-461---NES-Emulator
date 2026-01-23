@@ -10,7 +10,7 @@ bool console::load_rom(char* filepath) {
         return false;
     }
     std::fprintf(stderr, "[console] Loaded: %s | mapper=%u | PRG banks=%d | CHR banks=%d | PRG=%zu bytes\n",
-                 filepath, rom.mapper(), rom.prg_banks(), rom.chr_banks(), rom.prg_size_bytes());
+                 filepath, rom.mapper(), rom.prg_size_bytes() / 16384, rom.chr_size_bytes() / 8192, rom.prg_size_bytes());
 
     if (rom.mapper() != 0) {
         std::fprintf(stderr, "[console] WARNING: Only Mapper 0 (NROM) supported right now.\n");
