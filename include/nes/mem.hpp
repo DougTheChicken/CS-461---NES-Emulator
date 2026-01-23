@@ -20,6 +20,11 @@ private:
     const uint8_t* prg = nullptr;
     size_t prg_len = 0; // 0x4000 or 0x8000
 
-    // super-minimal PPU stub state
-    uint8_t ppu_status = 0x80; // bit7 (VBlank) set so init loops don’t hang
+    // Storing state for $2000-$2007
+    uint8_t ppu_ctrl = 0x00; // $2000
+    uint8_t ppu_mask = 0x00; // $2001
+    uint8_t ppu_status = 0x00; // $2002
+    uint8_t oam_addr = 0x00; // $2003
+    uint8_t ppu_scroll = 0x00; // $2005
+    uint8_t ppu_addr = 0x00; // $2006
 };
