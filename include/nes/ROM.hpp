@@ -8,20 +8,35 @@ namespace nes {
     class ROM {
     public:
         bool load_from_file(const char* path);
+        void reset();
 
-        std::size_t     prg_size_bytes() const;
-        const uint8_t*  prg_data() const;
-
+        std::size_t prg_size_bytes() const { return PRG_ROM_size * 16384u; }
+        const uint8_t* prg_data() const { return PRG_data.data(); }
+        std::size_t chr_size_bytes() const { return CHR_ROM_size * 8192u; }
+        const uint8_t* chr_data() const { return CHR_data.data(); }
+        const bool alternate_nametable_layout() const { return has_alternate_nametable_layout; }
         uint8_t mapper() const { return mapper_id; }
-        int     prg_banks() const { return PRG_ROM_size; }
-        int     chr_banks() const { return CHR_ROM_size; }
+        bool is_loaded() const { return parsed; }
 
     private:
+        bool parsed = false;
+
+        // Header
         int PRG_ROM_size = 0;   // 16KB units
         int CHR_ROM_size = 0;   // 8KB units
+
+        // Flags 6
+        bool nametable_arrangement; // false: vertical, true: horizontal
+        bool has_battery_backed_RAM;
+        bool has_trainer;
+        bool has_alternate_nametable_layout;
         uint8_t mapper_id = 0;
 
-        // PRG then CHR (trainer skipped if present)
-        std::vector<uint8_t> ROM_data;
+        // Flags 7-10 can be added later as needed as almost no games use them
+
+        // Data
+        std::vector<uint8_t> Trainer_data; // 512 bytes if present, parsed but not used for now
+        std::vector<uint8_t> PRG_data;
+        std::vector<uint8_t> CHR_data;
     };
 }
