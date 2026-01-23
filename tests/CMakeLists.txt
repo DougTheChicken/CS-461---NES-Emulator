@@ -19,6 +19,14 @@ target_link_libraries(mem_tests
         nes_lib
 )
 
+add_executable(ROM_tests "ROM/ROM_tests.cpp")
+
+target_link_libraries(ROM_tests
+        PRIVATE
+        nes_lib
+        GTest::gtest_main
+)
+
 # wherever you define nes_lib (or your main target)
 target_include_directories(nes_lib PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
