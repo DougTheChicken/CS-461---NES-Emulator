@@ -40,6 +40,40 @@ uint8_t Memory::read(uint16_t addr) {
         }
     }
 
+    // Controller 1
+    if (addr == 0x4016) {
+        uint8_t data = 0;
+
+        if (joy_strobe) {
+            // If strobe is still high, we just return the 'A' button instantly
+            data = joy1_state & 1;
+        }
+        else {
+            // Standard read: Return lowest bit, then shift right
+            data = joy1_shifter & 1;
+            joy1_shifter >>= 1; // Shift to next button for next read
+            joy1_shifter |= 0x80; // Standard NES hardware behavior for empty bits
+        }
+        return data;
+    }
+
+    // Controller 2
+    if (addr == 0x4017) {
+        uint8_t data = 0;
+
+        if (joy_strobe) {
+            // If strobe is still high, we just return the 'A' button instantly
+            data = joy2_state & 1;
+        }
+        else {
+            // Standard read: Return lowest bit, then shift right
+            data = joy2_shifter & 1;
+            joy2_shifter >>= 1; // Shift to next button for next read
+            joy2_shifter |= 0x80;
+        }
+        return data;
+    }
+
     // $8000–$FFFF: PRG ROM (mirror 16KB if needed)
     if (addr >= 0x8000 && prg && prg_len) {
         size_t off = static_cast<size_t>(addr - 0x8000);
@@ -88,6 +122,25 @@ void Memory::write(uint16_t addr, uint8_t data) {
             // TODO: Write data to VRAM at ppu_addr, then increment ppu_addr
             break;
         }
+        return;
+    }
+
+    if (addr == 0x4014) {
+        dma_page = data;
+        dma_transfer = true; // Tell the CPU/Main loop to suspend and copy data
+        return;
+    }
+
+    if (addr == 0x4016) {
+        bool new_strobe = (data & 1) != 0;
+
+        // If strobe is high, shifter keeps matching current state
+        if (joy_strobe) {
+            joy1_shifter = joy1_state;
+            joy2_shifter = joy2_state;
+        }
+
+        joy_strobe = new_strobe;
         return;
     }
 
