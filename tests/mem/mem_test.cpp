@@ -58,12 +58,60 @@ void test_bounds_safety() {
     log_pass("Bounds & Safety");
 }
 
+void test_controller_input() {
+    Memory mem;
+
+    // 1. Simulate Player holding 'A' and 'Start' buttons
+    // Standard NES Bit Order: Right Left Down Up Start Sel B A
+    // But our shift register logic usually expects:
+    // Bit 0 = A, Bit 3 = Start. 
+    // Let's set the input byte to 0b00001001 (0x09) -> A and Start are pressed.
+    mem.set_controller1(0x09);
+    mem.set_controller2(0x09);
+
+    // 2. Perform the "Strobe" Sequence
+    // To read the controller, the game writes 1, then 0 to $4016.
+    mem.write(0x4016, 1); // Strobe ON (Reloads buttons continuously)
+    mem.write(0x4016, 0); // Strobe OFF (Locks current state into shift register)
+
+    // 3. Read the buttons one by one (Serial Read)
+    // Expected Sequence: A(1), B(0), Sel(0), Start(1), Up(0), Down(0), Left(0), Right(0)
+
+    // Controller 1
+    assert(mem.read(0x4016) == 1); // Read 1: A (Pressed)
+    assert(mem.read(0x4016) == 0); // Read 2: B
+    assert(mem.read(0x4016) == 0); // Read 3: Select
+    assert(mem.read(0x4016) == 1); // Read 4: Start (Pressed)
+    assert(mem.read(0x4016) == 0); // Read 5: Up
+    assert(mem.read(0x4016) == 0); // Read 6: Down
+    assert(mem.read(0x4016) == 0); // Read 7: Left
+    assert(mem.read(0x4016) == 0); // Read 8: Right
+
+    // Controller 2
+    assert(mem.read(0x4017) == 1); // Read 1: A (Pressed)
+    assert(mem.read(0x4017) == 0); // Read 2: B
+    assert(mem.read(0x4017) == 0); // Read 3: Select
+    assert(mem.read(0x4017) == 1); // Read 4: Start (Pressed)
+    assert(mem.read(0x4017) == 0); // Read 5: Up
+    assert(mem.read(0x4017) == 0); // Read 6: Down
+    assert(mem.read(0x4017) == 0); // Read 7: Left
+    assert(mem.read(0x4017) == 0); // Read 8: Right
+
+    // 4. Test "Open Bus" or Empty Reads
+    // After 8 reads, the standard NES controller keeps returning 1 (or open bus).
+    // For simple emulation, returning 1 is common to signal "end of data".
+    // assert(mem.read(0x4016) == 1); 
+
+    log_pass("Controller Strobe & Shift Register");
+}
+
 int main() {
     std::cout << "Running NES Memory Tests..." << std::endl;
 
     test_ram_functionality();
     test_ppu_registers();
     test_bounds_safety();
+    test_controller_input();
 
     std::cout << "\nAll tests passed successfully!!" << std::endl;
     return 0;

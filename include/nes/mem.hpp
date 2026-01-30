@@ -12,6 +12,10 @@ public:
     uint8_t read(uint16_t addr);
     void    write(uint16_t addr, uint8_t data);
 
+    // Helper to let main loop update buttons
+    void set_controller1(uint8_t buttons) { joy1_state = buttons; }
+    void set_controller2(uint8_t buttons) { joy2_state = buttons; }
+
 private:
     // $0000–$07FF internal RAM (mirrored to $1FFF)
     uint8_t ram[2048];
@@ -27,4 +31,14 @@ private:
     uint8_t oam_addr = 0x00; // $2003
     uint8_t ppu_scroll = 0x00; // $2005
     uint8_t ppu_addr = 0x00; // $2006
+
+    // Controller State
+    uint8_t joy1_state = 0x00;
+    uint8_t joy1_shifter = 0x00;
+    uint8_t joy2_state = 0x00;
+    uint8_t joy2_shifter = 0x00;
+    bool joy_strobe = false;
+
+    uint8_t dma_page = 0x00;
+    bool dma_transfer = false;
 };
