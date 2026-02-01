@@ -267,7 +267,6 @@ public:
 // f = fCPU/(32*(tval + 1))
 // tval = fCPU/(32*f) - 1
 
-
 class Triangle {
 public:
     LengthCounter length_counter;
@@ -299,10 +298,102 @@ public:
     // get current output sample (0-15)
     uint8_t output() const;
 
-    // reset all state
+    // reset all triangle state
     void reset();
 
 };
+
+// From: https://www.nesdev.org/wiki/APU_Noise
+// The NES APU noise channel generates pseudo-random 1-bit noise at 16 different frequencies.
+//
+// The noise channel contains the following: envelope generator, timer, Linear Feedback Shift Register, length counter.
+//
+//       Timer --> Shift Register   Length Counter
+//                       |                |
+//                       v                v
+//    Envelope -------> Gate ----------> Gate --> (to mixer)
+class Noise
+{
+public:
+    Envelope envelope;
+    LengthCounter length_counter;
+
+    // length counter halt flag $400C bit 4
+    bool length_counter_halt = false;
+
+    // constant volume $400C bit 5
+    bool constant_volume_flag = false;
+
+    // bits 3-0 of $400C
+    uint8_t volume_envelope_divider_period = 0;
+
+    //  mode is set by bit 7 of $400E
+    bool mode_flag = false;
+
+    // bits 3-0 of $400E
+    uint8_t timer_period_index = 0;
+
+    // countdown timer that reloads from table and clocks the shift register on 0
+    uint16_t timer_counter = 0;
+
+    // The timer period is set to the entry timer_period_index of a lookup table
+    // which represents how many APU cycles happen between shift register clocks (half the CPU-cycle values
+    // shown on NES Dev Wiki).
+    // We only implement NTSC periods and ignore the 16 possible PAL values,
+    // so a 1-dimension table suffices.
+    // The index corresponds to $400E bits 3–0 of timer_period_index.
+    // We inline to reduce confusion.
+    inline static constexpr uint16_t TIMER_PERIOD_IN_APU_TICKS[16] = {
+        2,    // $0:  4  CPU cycles
+        4,    // $1:  8
+        8,    // $2:  16
+       16,    // $3:  32
+       32,    // $4:  64
+       48,    // $5:  96
+       64,    // $6:  128
+       80,    // $7:  160
+      101,    // $8:  202
+      127,    // $9:  254
+      190,    // $A:  380
+      254,    // $B:  508
+      381,    // $C:  762
+      508,    // $D:  1016
+     1017,    // $E:  2034
+     2034     // $F:  4068 (old hardware listed 2046 which makes rumbly sounds sound kinda wrong)
+   };
+
+    // The shift register is 15 bits wide, with bits numbered
+    // 14 - 13 - 12 - 11 - 10 - 9 - 8 - 7 - 6 - 5 - 4 - 3 - 2 - 1 - 0
+    // When the timer clocks the shift register, the following actions occur in order:
+    // Fedback is calculated as the exclusive-OR of bit 0 and one other bit:
+    // bit 6 if Mode flag is set, otherwise bit 1.
+    // The shift register is shifted right by one bit.
+    // Bit 14, the leftmost bit, is set to the feedback calculated earlier.
+    // This results in a pseudo-random bit sequence, 32767 steps long when Mode flag is clear,
+    // and randomly 93 or 31 steps long otherwise (aka long mode and short mode in some descriptions).
+    // The particular 31- or 93-step sequence depends on where in the 32767-step sequence
+    // the shift register was when Mode flag was set.
+    // The mixer receives the current envelope volume except when
+    // Bit 0 of the shift register is set, or
+    // The length counter is zero
+    // On power-up, the shift register is loaded with the value 1.
+    // We store teh 15-bit LFSR state in a uint16_t and updated with bit operations.
+    uint16_t shift_register_state = 1;
+
+    // clock the timer called every APU cycle = every 2 CPU cycles
+    void clock_timer();
+
+    // clock the shift register
+    void clock_shift_register();
+
+    // get current output sample (0-15)
+    uint8_t output() const;
+
+    // reset all noise state
+    void reset();
+};
+
+
 
 // The main APU class contains all audio channels and the frame counter.
 // Based on https://www.nesdev.org/wiki/APU#Pulse_($4000–$4007)
@@ -348,8 +439,10 @@ public:
 
     PulseChannel pulse1{true};   // true = is pulse 1 (affects sweep)
     PulseChannel pulse2{false};  // false = is pulse 2
+    Triangle triangle;
+    Noise noise;
 
-    // TODO: Triangle, Noise, and DMC
+    // TODO: Mixer, and DMC
 
     //  frame counter
     uint16_t frame_counter_cycles = 0;  // Cycle counter for frame sequencer
