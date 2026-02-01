@@ -78,7 +78,7 @@ public:
 //    Pulse 2 adds the two's complement (−c). Making 20 negative produces a change amount of −20.
 //    Whenever the current period or sweep setting changes, whether by $400x writes or by sweep updating the period,
 //    the target period also changes.
-//
+
 class SweepUnit {
 public:
     //  configuration set by CPU writes to $4001/$4005
@@ -131,7 +131,7 @@ public:
 //   0x00: 10    0x01: 254   0x02: 20    0x03: 2
 //   0x04: 40    0x05: 4     0x06: 80    0x07: 6
 //   ... and so on (see implementation for full table)
-//
+
 class LengthCounter {
 public:
     bool halt = false;                // when true, counter doesn't decrement
@@ -200,7 +200,9 @@ public:
     // lower values = higher frequency.
     uint16_t timer_period = 0;        // 11-bit period value from registers $4002 + lower 3 bits of $4003 for pulse 1
                                       // and $4006 (low) + $4007's lower 3 bits (high) for pulse 2
-    uint16_t timer_counter = 0;       // current countdown value
+
+    // countdown timer that reloads from table and clocks the shift register on 0
+    uint16_t timer_counter = 0;
 
     //  Duty cycle sequencer 
     // (8-step sequence, 4 different duty patterns)
@@ -283,6 +285,9 @@ public:
     // The timer is an 11-bit value (0-2047). Unlike Pulse, Triangle timer ticks at the rate of the CPU clock.
     uint16_t timer_period = 0;        // 11-bit period value from lower 3 bits of $400B (high) + $400A (low)
 
+    // countdown timer that reloads from table and clocks the shift register on 0
+    uint16_t timer_counter = 0;
+
     // The sequencer is clocked by the timer as long as both the linear counter and the length counter are nonzero.
     // The sequencer sends the following looping 32-step sequence of values to the mixer:
     // 15, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  4,  3,  2,  1,  0
@@ -292,7 +297,7 @@ public:
     // write to channel registers
     void write_register(uint8_t reg, uint8_t value);
 
-    // clock the timer called every APU cycle = every 2 CPU cycles
+    // clock the timer called every APU cycle = every CPU cycle (Triangle only!)
     void clock_timer();
 
     // get current output sample (0-15)
@@ -337,12 +342,11 @@ public:
     uint16_t timer_counter = 0;
 
     // The timer period is set to the entry timer_period_index of a lookup table
-    // which represents how many APU cycles happen between shift register clocks (half the CPU-cycle values
-    // shown on NES Dev Wiki).
-    // We only implement NTSC periods and ignore the 16 possible PAL values,
-    // so a 1-dimension table suffices.
-    // The index corresponds to $400E bits 3–0 of timer_period_index.
-    // We inline to reduce confusion.
+    // which represents how many APU cycles happen between shift register clocks
+    // (half the CPU-cycle values shown on NES Dev Wiki).
+    // We only implement NTSC periods and ignore the 16 possible PAL values, so
+    // a 1-dimension table suffices. The index corresponds to $400E bits 3–0
+    // of timer_period_index. We inline to reduce confusion.
     inline static constexpr uint16_t TIMER_PERIOD_IN_APU_TICKS[16] = {
         2,    // $0:  4  CPU cycles
         4,    // $1:  8
@@ -393,7 +397,23 @@ public:
     void reset();
 };
 
+class DeltaModulationChannel
+{
+public:
 
+
+    // clock the timer called every APU cycle = every 2 CPU cycles
+    void clock_timer();
+
+    // clock the shift register
+    void clock_shift_register();
+
+    // get current output sample (0-15)
+    uint8_t output() const;
+
+    // reset all noise state
+    void reset();
+};
 
 // The main APU class contains all audio channels and the frame counter.
 // Based on https://www.nesdev.org/wiki/APU#Pulse_($4000–$4007)
