@@ -411,17 +411,59 @@ class DeltaModulationChannel
 {
 public:
 
+    bool enabled = false;
+    bool loop = false;
+
+    // rate index
+    // rate determines for how many CPU cycles happen between changes in
+    // the output level during automatic delta-encoded playback..
+    uint8_t rate_index = 0;
+
+    // 6 bits of $4011
+    uint8_t direct_load = 0;
+
+    // all of $4012 AAAA.AAAA
+    // Sample address = %11AAAAAA.AA000000 = $C000 + (A * 64)
+    uint8_t sample_address = 0;
+
+    // all of $4013 LLLL.LLLL
+    // Sample length = %LLLL.LLLL0001 = (L * 16) + 1 bytes
+    uint8_t sample_length = 0;
+
+    // rate table
+    // The rate determines for how many CPU cycles happen between changes in the
+    // output level during automatic delta-encoded sample playback. For example,
+    // on NTSC (1.789773 MHz), a rate of 428 gives a frequency of
+    // 1789773/428 Hz = 4181.71 Hz. Inlined to reduce confusion and risk.
+    // NES Dev Wiki has these values doubled because it assumes 1 CPU per APU clock,
+    // but we are clocking our APU for every two CPU clocks already, so we halve the values
+    // here.
+    inline static constexpr uint16_t RATE[16] = {
+        414, // $0
+        190, // $1
+        170, // $2
+        160, // $3
+        143, // $4
+        127, // $5
+        113, // $6
+        107, // $7
+        95, // $8
+        80, // $9
+        71, // $A
+        64, // $B
+        53, // $C
+        42, // $D
+        36, // $E
+        27 // $F
+    };
 
     // clock the timer called every APU cycle = every 2 CPU cycles
     void clock_timer();
 
-    // clock the shift register
-    void clock_shift_register();
-
     // get current output sample (0-15)
     uint8_t output() const;
 
-    // reset all noise state
+    // reset all dmc state
     void reset();
 };
 
