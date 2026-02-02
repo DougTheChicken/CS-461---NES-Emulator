@@ -397,6 +397,16 @@ public:
     void reset();
 };
 
+// From https://www.nesdev.org/wiki/APU#Glossary
+// The delta modulation channel outputs a 7-bit PCM signal from a counter that can be driven by DPCM samples.
+//     DPCM samples are stored as a stream of 1-bit deltas that control the 7-bit PCM counter that the channel outputs. A bit of 1 will increment the counter, 0 will decrement, and it will clamp rather than overflow if the 7-bit range is exceeded.
+//    DPCM samples may loop if the loop flag in $4010 is set, and the DMC may be used to generate an IRQ when the end of the sample is reached if its IRQ flag is set.
+//    The playback rate is controlled by register $4010 with a 4-bit frequency index value (see APU DMC for frequency lookup tables).
+//    DPCM samples must begin in the memory range $C000–$FFFF at an address set by register $4012 (address = %11AAAAAA AA000000).
+//    The length of the sample in bytes is set by register $4013 (length = %LLLL LLLL0001).
+//    The $4011 register can be used to play PCM samples directly by setting the counter value at a high frequency. Because this requires intensive use of the CPU, when used in games all other gameplay is usually halted to facilitate this.
+//    Because of the APU's nonlinear mixing, a high value in the PCM counter reduces the volume of the triangle and noise channels. This is sometimes used to apply limited volume control to the triangle channel (e.g. Super Mario Bros. adjusts the counter between levels to accomplish this).
+//    The DMC's IRQ can be used as an IRQ-based timer when the mapper used does not have one available.
 class DeltaModulationChannel
 {
 public:
