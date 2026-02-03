@@ -384,6 +384,9 @@ public:
     // We store teh 15-bit LFSR state in a uint16_t and updated with bit operations.
     uint16_t shift_register_state = 1;
 
+    // write to channel registers
+    void write_register(uint8_t reg, uint8_t value);
+
     // clock the timer called every APU cycle = every 2 CPU cycles
     void clock_timer();
 
@@ -411,7 +414,20 @@ class DeltaModulationChannel
 {
 public:
 
+    // bit 7 of $4010
+    // if true, DMC may assert IRQ when the sample finishes and loop is off
+    // otherwise DMC may not issue IRQs
+    bool irq_enable = false;
+
+    // this is the IRQ to the CPU
+    // set when bytes_remaining = 0 and loop == false adn irq_enable == true
+    // cleared when CPU writes anything to APU status register $4015
+    bool irq_pending = false;
+
+    // $4015 bit 4 controls whether DMC runs
     bool enabled = false;
+
+    // bit 6 of $4010
     bool loop = false;
 
     // rate index
@@ -419,8 +435,8 @@ public:
     // the output level during automatic delta-encoded playback..
     uint8_t rate_index = 0;
 
-    // 6 bits of $4011
-    uint8_t direct_load = 0;
+    // 7 bits of $4011
+    uint8_t output_level = 0;
 
     // all of $4012 AAAA.AAAA
     // Sample address = %11AAAAAA.AA000000 = $C000 + (A * 64)
@@ -438,8 +454,9 @@ public:
     // NES Dev Wiki has these values doubled because it assumes 1 CPU per APU clock,
     // but we are clocking our APU for every two CPU clocks already, so we halve the values
     // here.
+    // see https://www.nesdev.org/wiki/APU_DMC#Pitch_table for full pitch table
     inline static constexpr uint16_t RATE[16] = {
-        414, // $0
+        214, // $0
         190, // $1
         170, // $2
         160, // $3
@@ -457,10 +474,71 @@ public:
         27 // $F
     };
 
+    // memory reader state values
+    // TODO: separate class?
+
+    // The sample buffer either holds a single 8-bit sample byte or is empty. It is filled
+    // by the reader and can only be emptied by the output unit; once loaded with a sample
+    // byte it will be played back when output unit reaches the end of a byte
+    uint8_t sample_buffer = 0;
+
+    // sample buffer either holds a single 8-bit sample byte or is empty
+    bool sample_buffer_full = false;
+
+    // offset into sample
+    uint16_t current_address = 0;
+
+    // how many bytes of the current sample are left to be played
+    uint16_t bytes_remaining = 0;
+
+    // output unit state values
+    // TODO: separate class?
+    // Nothing can interrupt a cycle; every cycle runs to completion before a new cycle is started.
+
+    // countdown timer that reloads from RATE[rate_index]
+    // we decrement timer_counter once per APU tick and never do halving
+    // because our inline table has already been halved.
+    uint16_t timer_counter = 0;
+
+    // holds the current 8 bits loaded from the sample buffer on every output cycle end
+    uint8_t shift_reg = 0;
+
+    // The bits remaining counter is updated whenever a timer outputs a clock regardless
+    // of whether a sample is currently playing. When this counter reaches zero, we say
+    // teh output cycle ends.  The DPCM unit can only transition from silent to playing
+    // at the end of an output cycle. See https://www.nesdev.org/wiki/APU_DMC#Output_unit
+    uint8_t bits_remaining = 0;
+
+    // output_level is not changed when silence is true
+    bool silence = false;
+
+    // write to channel registers
+    void write_register(uint8_t reg, uint8_t value);
+
+    // when a sample is (re)started, the current address is set to the sample address,
+    // and bytes remaining is set to the sample length.
+    void play_sample();
+
+    // attempts to fill sample_buffer if empty and bytes_remaining > 0.
+    // returns true if a fetch occurred.
+    // consumes byte, bumps address and may wrap, may trigger loop, needs to stall CPU somehow.
+    // see https://www.nesdev.org/wiki/APU_DMC#Memory_reader for tricky implementation
+    // guidance.
+    // TODO: improve comment to explain trickiness
+    bool fetch_sample_byte();
+
+    // TODO: implement CPU read and stall mechanisms
+
     // clock the timer called every APU cycle = every 2 CPU cycles
     void clock_timer();
 
-    // get current output sample (0-15)
+    // helper method to handle output operations
+    void clock_output_unit();
+
+    // helper method to handle sample buffer operations
+    void clock_memory_unit();
+
+    // get current 7-bit output sample (0-127)
     uint8_t output() const;
 
     // reset all dmc state
@@ -513,8 +591,9 @@ public:
     PulseChannel pulse2{false};  // false = is pulse 2
     Triangle triangle;
     Noise noise;
+    DeltaModulationChannel dmc;
 
-    // TODO: Mixer, and DMC
+    // TODO: Mixer
 
     //  frame counter
     uint16_t frame_counter_cycles = 0;  // Cycle counter for frame sequencer
