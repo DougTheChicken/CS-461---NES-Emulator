@@ -2,10 +2,15 @@
 #include <cstdint>
 
 namespace nes {
+
+// APU needs memory access
+class Memory;
+
 // From https://www.nesdev.org/wiki/APU_Envelope
 // In a synthesizer, an envelope is the way a sound's parameter changes over time.
 // The NES APU has an envelope generator that controls the volume in one of two ways:
 // it can generate a decreasing saw envelope (like a decay phase of an ADSR) with optional looping,
+    
 // or it can generate a constant volume that a more sophisticated software envelope generator
 // can manipulate.
 // Volume values are practically linear (see: APU Mixer).
@@ -40,15 +45,26 @@ namespace nes {
 
 class Envelope {
 public:
-    //  Configuration (set by CPU writes to $4000/$4004) 
-    bool loop_flag = false;           // Also serves as length counter halt
-    bool constant_volume_flag = false; // true = use volume directly, false = use decay
-    uint8_t volume_period = 0;        // 4 bits: either constant volume OR envelope period
+    //  Configuration (set by CPU writes to $4000/$4004)
 
-    //  Internal state 
-    bool start_flag = false;          // Set when note starts, triggers envelope restart
-    uint8_t decay_level = 0;          // Current envelope volume (counts down 15->0)
-    uint8_t divider = 0;              // Divider countdown (reloads from volume_period)
+    // Also serves as length counter halt
+    bool loop_flag = false;
+
+    // true = use volume directly, false = use decay
+    bool constant_volume_flag = false;
+
+    // 4 bits: either constant volume OR envelope period
+    uint8_t volume_period = 0;
+
+    //  Internal state
+    // Set when note starts, triggers envelope restart
+    bool start_flag = false;
+
+    // Current envelope volume (counts down 15->0)
+    uint8_t decay_level = 0;
+
+    // Divider countdown (reloads from volume_period)
+    uint8_t divider = 0;
 
     // Clock the envelope (called on quarter-frame)
     void clock();
@@ -81,18 +97,32 @@ public:
 
 class SweepUnit {
 public:
+
     //  configuration set by CPU writes to $4001/$4005
-    bool enabled = false;             // sweep on/off
-    uint8_t period = 0;               // divider period (3 bits, 0-7)
-    bool negate = false;              // false = add (pitch down), true = subtract (pitch up)
-    uint8_t shift = 0;                // 3-bit shift amount for period adjustment SSS = 0 behaves like enabled = false
+
+    // sweep on/off
+    bool enabled = false;
+
+    // divider period (3 bits, 0-7)
+    uint8_t period = 0;
+
+    // false = add (pitch down), true = subtract (pitch up)
+    bool negate = false;
+
+    // 3-bit shift amount for period adjustment SSS = 0 behaves like enabled = false
+    uint8_t shift = 0;
 
     //  internal state
-    bool reload_flag = false;         // set when sweep register written
-    uint8_t divider = 0;              // current divider countdown
+    // set when sweep register written
+    bool reload_flag = false;
+
+    // current divider countdown
+    uint8_t divider = 0;
 
     //  channel identity (affects negation calculation)
-    bool is_pulse1 = true;            // Pulse 1 uses one's complement negation
+    // Pulse 1 uses one's complement negation
+    // Pulse 2 uses two's complement negation
+    bool is_pulse1 = true;
 
     // calculate target period given current period
     // returns the period the channel would have after one sweep adjustment
@@ -134,9 +164,12 @@ public:
 
 class LengthCounter {
 public:
-    bool halt = false;                // when true, counter doesn't decrement
 
-    uint8_t counter = 0;              // current counter value
+    // when true, counter doesn't decrement
+    bool halt = false;
+
+    // current counter value
+    uint8_t counter = 0;
 
     // load counter from lookup table called when $4003/$4007 written
     void load(uint8_t index);
@@ -198,8 +231,10 @@ public:
     // Timer controls frequency
     // The timer is an 11-bit value (0-2047). The actual period in CPU cycle is (timer_period + 1) * 2 where
     // lower values = higher frequency.
-    uint16_t timer_period = 0;        // 11-bit period value from registers $4002 + lower 3 bits of $4003 for pulse 1
-                                      // and $4006 (low) + $4007's lower 3 bits (high) for pulse 2
+
+    // 11-bit period value from registers $4002 + lower 3 bits of $4003 for pulse 1
+    // and $4006 (low) + $4007's lower 3 bits (high) for pulse 2
+    uint16_t timer_period = 0;
 
     // countdown timer that reloads from table and clocks the shift register on 0
     uint16_t timer_counter = 0;
@@ -213,8 +248,12 @@ public:
     //   75%:   1 0 0 1 1 1 1 1  (6 high, 2 low)
     // The sequencer steps through 8 positions, outputting 0 or 1 based on
     // the selected duty cycle pattern.
-    uint8_t duty_mode = 0;            // 0-3: selects one of 4 duty patterns
-    uint8_t sequencer_position = 0;   // 0-7: current position in sequence
+
+    // 0-3: selects one of 4 duty patterns
+    uint8_t duty_mode = 0;
+
+    // 0-7: current position in sequence
+    uint8_t sequencer_position = 0;
 
     //  channel state
     bool enabled = false;             // set via $4015 status register
@@ -305,7 +344,6 @@ public:
 
     // reset all triangle state
     void reset();
-
 };
 
 // From: https://www.nesdev.org/wiki/APU_Noise
@@ -402,14 +440,23 @@ public:
 
 // From https://www.nesdev.org/wiki/APU#Glossary
 // The delta modulation channel outputs a 7-bit PCM signal from a counter that can be driven by DPCM samples.
-//     DPCM samples are stored as a stream of 1-bit deltas that control the 7-bit PCM counter that the channel outputs. A bit of 1 will increment the counter, 0 will decrement, and it will clamp rather than overflow if the 7-bit range is exceeded.
-//    DPCM samples may loop if the loop flag in $4010 is set, and the DMC may be used to generate an IRQ when the end of the sample is reached if its IRQ flag is set.
-//    The playback rate is controlled by register $4010 with a 4-bit frequency index value (see APU DMC for frequency lookup tables).
-//    DPCM samples must begin in the memory range $C000–$FFFF at an address set by register $4012 (address = %11AAAAAA AA000000).
-//    The length of the sample in bytes is set by register $4013 (length = %LLLL LLLL0001).
-//    The $4011 register can be used to play PCM samples directly by setting the counter value at a high frequency. Because this requires intensive use of the CPU, when used in games all other gameplay is usually halted to facilitate this.
-//    Because of the APU's nonlinear mixing, a high value in the PCM counter reduces the volume of the triangle and noise channels. This is sometimes used to apply limited volume control to the triangle channel (e.g. Super Mario Bros. adjusts the counter between levels to accomplish this).
-//    The DMC's IRQ can be used as an IRQ-based timer when the mapper used does not have one available.
+// DPCM samples are stored as a stream of 1-bit deltas that control the 7-bit PCM counter that the channel outputs.
+// A bit of 1 will increment the counter, 0 will decrement, and it will clamp rather than overflow if the 7-bit range
+// is exceeded.
+// DPCM samples may loop if the loop flag in $4010 is set, and the DMC may be used to generate an IRQ when the end of
+// the sample is reached if its IRQ flag is set.
+// The playback rate is controlled by register $4010 with a 4-bit frequency index value (see APU DMC for frequency
+// lookup tables).
+// DPCM samples must begin in the memory range $C000–$FFFF at an address set by register $4012
+// (address = %11AAAAAA AA000000).
+// The length of the sample in bytes is set by register $4013 (length = %LLLL LLLL0001).
+// The $4011 register can be used to play PCM samples directly by setting the counter value at a high frequency.
+// Because this requires intensive use of the CPU, when used in games all other gameplay is usually halted to f
+// acilitate this.
+// Because of the APU's nonlinear mixing, a high value in the PCM counter reduces the volume of the triangle and
+// noise channels. This is sometimes used to apply limited volume control to the triangle channel (e.g. Super
+// Mario Bros. adjusts the counter between levels to accomplish this).
+// The DMC's IRQ can be used as an IRQ-based timer when the mapper used does not have one available.
 class DeltaModulationChannel
 {
 public:
@@ -527,7 +574,17 @@ public:
     // TODO: improve comment to explain trickiness
     bool fetch_sample_byte();
 
-    // TODO: implement CPU read and stall mechanisms
+    // Memory interface for DMC sample reads
+    // DMC needs to read sample bytes from CPU address space ($C000-$FFFF)
+    Memory* memory = nullptr;
+
+    // connect to memory subsystem for DMC sample reads
+    void attach_memory(Memory* m);
+
+    // CPU stall cycles pending from DMC sample fetches
+    // DMC sample fetches cause CPU stalls due to bus contention (typically 1-4 cycles)
+    // check this after each APU step and apply stalls to CPU
+    uint8_t pending_stall_cycles = 0;
 
     // clock the timer called every APU cycle = every 2 CPU cycles
     void clock_timer();
@@ -536,6 +593,8 @@ public:
     void clock_output_unit();
 
     // helper method to handle sample buffer operations
+    // calls fetch_sample_byte() whenever sample buffer is empty and
+    // there are bytes remaining no matter whether output unit is silent
     void clock_memory_unit();
 
     // get current 7-bit output sample (0-127)
@@ -550,8 +609,9 @@ public:
 //
 // From https://www.nesdev.org/wiki/APU_Frame_Counter
 // The frame counter generates clocks for the envelope, length counter, and
-// sweep units. It can operate in two modes defined by $4017 depending how it is configured. It may optionally issue an IRQ on the last tick of the 4-step sequence.
-//    The following diagram illustrates the two modes, selected by bit 7 of $4017:
+// sweep units. It can operate in two modes defined by $4017 depending how it is configured.
+// It may optionally issue an IRQ on the last tick of the 4-step sequence.
+// The following diagram illustrates the two modes, selected by bit 7 of $4017:
 //    mode 0:    mode 1:       function
 //    -  ---  -
 //     - - - f    - - - - -    IRQ (if bit 6 is clear)
@@ -603,7 +663,7 @@ public:
     bool frame_irq_flag = false;        // Frame IRQ pending
 
     //  register interface
-    // writes to these should go through write_register()
+    //  writes to these should go through write_register()
     uint8_t $4000 = 0, $4001 = 0, $4002 = 0, $4003 = 0;  // Pulse 1
     uint8_t $4004 = 0, $4005 = 0, $4006 = 0, $4007 = 0;  // Pulse 2
     uint8_t $4008 = 0, $4009 = 0, $400A = 0, $400B = 0;  // Triangle
