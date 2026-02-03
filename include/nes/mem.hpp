@@ -1,44 +1,45 @@
 #pragma once
 #include <cstdint>
 #include <cstddef>
-#include <cstring>
+
+namespace nes {
 
 class Memory {
 public:
     Memory();
 
-    void map_prg(const uint8_t* prg_data, size_t prg_size); // 16KB or 32KB
-
+    // CPU-visible bus reads/writes
     uint8_t read(uint16_t addr);
-    void    write(uint16_t addr, uint8_t data);
+    void write(uint16_t addr, uint8_t value);
 
-    // Helper to let main loop update buttons
-    void set_controller1(uint8_t buttons) { joy1_state = buttons; }
-    void set_controller2(uint8_t buttons) { joy2_state = buttons; }
+    // Map PRG ROM into $8000-$FFFF. For NROM, either 16KB mirrored or 32KB.
+    void map_prg(const uint8_t* prg_data, std::size_t prg_size);
+
+    // Controller latches (simple placeholders)
+    void set_controller1(uint8_t v) { controller1 = v; }
+    void set_controller2(uint8_t v) { controller2 = v; }
+
+    // Reset memory-mapped state back to a known state (does not modify ROM bytes)
+    void reset();
 
 private:
-    // $0000–$07FF internal RAM (mirrored to $1FFF)
-    uint8_t ram[2048];
+    // Internal RAM ($0000-$07FF), mirrored to $1FFF
+    uint8_t ram[0x800]{};
 
-    // PRG ROM (mapped at $8000–$FFFF)
+    // PRG ROM bytes (owned by ROM)
     const uint8_t* prg = nullptr;
-    size_t prg_len = 0; // 0x4000 or 0x8000
+    std::size_t prg_size_bytes = 0;
 
-    // Storing state for $2000-$2007
-    uint8_t ppu_ctrl = 0x00; // $2000
-    uint8_t ppu_mask = 0x00; // $2001
-    uint8_t ppu_status = 0x00; // $2002
-    uint8_t oam_addr = 0x00; // $2003
-    uint8_t ppu_scroll = 0x00; // $2005
-    uint8_t ppu_addr = 0x00; // $2006
+    // Controller registers (placeholders)
+    uint8_t controller1 = 0;
+    uint8_t controller2 = 0;
 
-    // Controller State
-    uint8_t joy1_state = 0x00;
-    uint8_t joy1_shifter = 0x00;
-    uint8_t joy2_state = 0x00;
-    uint8_t joy2_shifter = 0x00;
-    bool joy_strobe = false;
+    // PPU/APU registers (placeholders)
+    uint8_t ppu_regs[8]{};
+    uint8_t apu_regs[0x18]{};
 
-    uint8_t dma_page = 0x00;
-    bool dma_transfer = false;
+    // DMA register placeholder ($4014)
+    uint8_t oam_dma = 0;
 };
+
+} // namespace nes
