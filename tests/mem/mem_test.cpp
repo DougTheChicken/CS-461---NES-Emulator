@@ -8,7 +8,7 @@ void log_pass(const char* test_name) {
 }
 
 void test_ram_functionality() {
-    Memory mem;
+    nes::Memory mem;
 
     // 1. Basic Read/Write
     mem.write(0x0000, 0x42);
@@ -30,7 +30,7 @@ void test_ram_functionality() {
 }
 
 void test_ppu_registers() {
-    Memory mem;
+    nes::Memory mem;
 
     // 1. Test Initial PPU Status ($2002)
     // Your constructor sets ppu_status = 0x80 (VBlank)
@@ -48,7 +48,7 @@ void test_ppu_registers() {
 }
 
 void test_bounds_safety() {
-    Memory mem;
+    nes::Memory mem;
 
     // Test Open Bus / Unmapped regions
     // $4020 is start of Cartridge space, but no cart loaded yet.
@@ -59,7 +59,7 @@ void test_bounds_safety() {
 }
 
 void test_controller_input() {
-    Memory mem;
+    nes::Memory mem;
 
     // 1. Simulate Player holding 'A' and 'Start' buttons
     // Standard NES Bit Order: Right Left Down Up Start Sel B A

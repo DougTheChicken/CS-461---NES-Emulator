@@ -1,5 +1,4 @@
 #pragma once
-
 #include <cstdint>
 #include "nes/timing.hpp"   // cycle_t is defined in the global namespace here
 #include "nes/cpu.hpp"
@@ -12,13 +11,16 @@ public:
     ~console();
 
     bool load_rom(char* filepath);
+
     void run_rom();                 // headless smoke test
     void step(cycle_t stepcount);   // use ::cycle_t (global)
     void init();
 
+    void reset_all();
+
 private:
     nes::ROM  rom;
-    Memory    mem;
+    nes::Memory    mem;
     unsigned long long master_cycle_count = 0;
     nes::CPU  cpu;
 };
