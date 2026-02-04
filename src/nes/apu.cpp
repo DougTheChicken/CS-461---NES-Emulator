@@ -57,7 +57,7 @@ namespace nes
         }
     }
 
-    // length counters and sweep units only
+    // length counters and sweep units only on half frame
     // https://www.nesdev.org/wiki/APU_Frame_Counter
     void APU::clock_half_frame()
     {
@@ -73,7 +73,6 @@ namespace nes
         pulse2.clock_envelope();
         noise.clock_envelope();
         triangle.clock_linear_counter();
-
     }
 
     float APU::get_output() const
@@ -132,6 +131,7 @@ namespace nes
         ;
     }
 
+
     void Triangle::reset()
     {
         ;
@@ -143,9 +143,49 @@ namespace nes
         linear_counter--;
     }
 
+    void Triangle::clock_timer()
+    {
+        ;
+    }
+
+    uint8_t Triangle::output() const
+    {
+        return 1;
+    }
+
+    void Triangle::write_register(uint8_t reg, uint8_t value)
+    {
+        ;
+    }
+
     void Noise::clock_envelope()
     {
         envelope.clock();
+    }
+
+    void Noise::clock_timer()
+    {
+        ;
+    }
+
+    uint8_t Noise::output() const
+    {
+        return 1;
+    }
+
+    void Noise::write_register(uint8_t reg, uint8_t value)
+    {
+        ;
+    }
+
+    void Noise::clock_shift_register()
+    {
+        ;
+    }
+
+    void Noise::reset()
+    {
+        ;
     }
 
     void Envelope::clock()
@@ -153,7 +193,27 @@ namespace nes
         ;
     }
 
+    uint8_t Envelope::output() const
+    {
+        return 1;
+    }
+
+    void Envelope::reset()
+    {
+
+    }
+
     void LengthCounter::clock()
+    {
+        ;
+    }
+
+    void LengthCounter::load(uint8_t index)
+    {
+        ;
+    }
+
+    void LengthCounter::reset()
     {
         ;
     }
@@ -164,7 +224,59 @@ namespace nes
         return true;
     }
 
-    void Noise::reset()
+    uint16_t SweepUnit::calculate_target_period(uint16_t current_period) const
+    {
+        return 1;
+    }
+
+    bool SweepUnit::is_muting(uint16_t current_period) const
+    {
+        // TODO: fix naive implementation
+        return true;
+    }
+
+    void SweepUnit::reset()
+    {
+        ;
+    }
+
+    uint8_t DeltaModulationChannel::output() const
+    {
+        return 1;
+    }
+
+    void DeltaModulationChannel::clock_timer()
+    {
+        ;
+    }
+
+    void DeltaModulationChannel::write_register(uint8_t reg, uint8_t value)
+    {
+        ;
+    }
+
+    void DeltaModulationChannel::attach_memory(Memory* m)
+    {
+        ;
+    }
+
+    void DeltaModulationChannel::clock_memory_unit()
+    {
+        ;
+    }
+
+    void DeltaModulationChannel::clock_output_unit()
+    {
+        ;
+    }
+
+    bool DeltaModulationChannel::fetch_sample_byte()
+    {
+        // TODO: fix naive implementation
+        return true;
+    }
+
+    void DeltaModulationChannel::play_sample()
     {
         ;
     }
