@@ -57,14 +57,23 @@ namespace nes
         }
     }
 
+    // length counters and sweep units only
+    // https://www.nesdev.org/wiki/APU_Frame_Counter
     void APU::clock_half_frame()
     {
-        ;
+        pulse1.clock_length_and_sweep();
+        pulse2.clock_length_and_sweep();
     }
 
+    // envelopes and linear counters only on quarter frame
+    // https://www.nesdev.org/wiki/APU_Frame_Counter
     void APU::clock_quarter_frame()
     {
-        ;
+        pulse1.clock_envelope();
+        pulse2.clock_envelope();
+        noise.clock_envelope();
+        triangle.clock_linear_counter();
+
     }
 
     float APU::get_output() const
@@ -94,12 +103,13 @@ namespace nes
 
     void PulseChannel::clock_envelope()
     {
-        ;
+        envelope.clock();
     }
 
     void PulseChannel::clock_length_and_sweep()
     {
-        ;
+        length_counter.clock();
+        sweep.clock(timer_period);
     }
 
     void PulseChannel::clock_timer()
@@ -125,6 +135,33 @@ namespace nes
     void Triangle::reset()
     {
         ;
+    }
+
+    void Triangle::clock_linear_counter()
+    {
+        // TODO: fix naive implementation stub
+        linear_counter--;
+    }
+
+    void Noise::clock_envelope()
+    {
+        envelope.clock();
+    }
+
+    void Envelope::clock()
+    {
+        ;
+    }
+
+    void LengthCounter::clock()
+    {
+        ;
+    }
+
+    bool SweepUnit::clock(uint16_t& timer_period)
+    {
+        // TODO: fix naive implementation
+        return true;
     }
 
     void Noise::reset()

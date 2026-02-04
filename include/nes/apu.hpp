@@ -442,6 +442,9 @@ public:
     // clock the timer called every APU cycle = every 2 CPU cycles
     void clock_timer();
 
+    // clock envelope called on frame counter quarter-frame see clock_quarter_frame() in APU class
+    void clock_envelope();
+
     // clock the shift register
     void clock_shift_register();
 
