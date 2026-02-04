@@ -312,32 +312,46 @@ class Triangle {
 public:
     LengthCounter length_counter;
 
-    //  set by bit 7 of $4008
-    // This bit is also the length counter halt flag
+    // set by bit 7 of $4008
+    // this bit is also the length halt
     bool control_flag = false;
 
     // set by low 6-0 bits of $4008
-    // linear counter is reloaded with this value if control_flag is set
+    // linear counter is reloaded with this value if linear_reload_flag is set
     uint8_t counter_reload_value = 0;
 
-    // Timer controls frequency
-    // The timer is an 11-bit value (0-2047). Unlike Pulse, Triangle timer ticks at the rate of the CPU clock.
-    uint16_t timer_period = 0;        // 11-bit period value from lower 3 bits of $400B (high) + $400A (low)
+    // linear counter is clocked by the frame counter not the triangle timer
+    uint8_t linear_counter = 0;
 
-    // countdown timer that reloads from table and clocks the shift register on 0
+    // when set, linear_counter is reloaded from counter_reload_value
+    // cleared only if control_flag == 0 after the clock
+    bool linear_reload_flag = false;
+
+    // timer_period controls frequency
+    // the timer is an 11-bit value (0-2047). Unlike Pulse, Triangle timer ticks at the rate of the CPU clock.
+    // 11-bit period value from lower 3 bits of $400B (high) + $400A (low)
+    uint16_t timer_period = 0;
+
+    // countdown timer reloads from timer_period and clocks the sequencer when it reaches 0
     uint16_t timer_counter = 0;
+
+    // index into sequencer table
+    uint8_t sequencer_step = 0;
 
     // The sequencer is clocked by the timer as long as both the linear counter and the length counter are nonzero.
     // The sequencer sends the following looping 32-step sequence of values to the mixer:
     // 15, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  4,  3,  2,  1,  0
     // 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15
-    static const uint8_t SEQUENCER_TABLE[2][16];
+    static const uint8_t SEQUENCER_TABLE[32];
 
     // write to channel registers
     void write_register(uint8_t reg, uint8_t value);
 
     // clock the timer called every APU cycle = every CPU cycle (Triangle only!)
     void clock_timer();
+
+    // clock the linear counter by the frame counter
+    void clock_linear_counter();
 
     // get current output sample (0-15)
     uint8_t output() const;
