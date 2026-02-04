@@ -2,10 +2,15 @@
 #include <cstdint>
 
 namespace nes {
+
+// APU needs memory access
+class Memory;
+
 // From https://www.nesdev.org/wiki/APU_Envelope
 // In a synthesizer, an envelope is the way a sound's parameter changes over time.
 // The NES APU has an envelope generator that controls the volume in one of two ways:
 // it can generate a decreasing saw envelope (like a decay phase of an ADSR) with optional looping,
+    
 // or it can generate a constant volume that a more sophisticated software envelope generator
 // can manipulate.
 // Volume values are practically linear (see: APU Mixer).
@@ -40,15 +45,26 @@ namespace nes {
 
 class Envelope {
 public:
-    //  Configuration (set by CPU writes to $4000/$4004) 
-    bool loop_flag = false;           // Also serves as length counter halt
-    bool constant_volume_flag = false; // true = use volume directly, false = use decay
-    uint8_t volume_period = 0;        // 4 bits: either constant volume OR envelope period
+    //  Configuration (set by CPU writes to $4000/$4004)
 
-    //  Internal state 
-    bool start_flag = false;          // Set when note starts, triggers envelope restart
-    uint8_t decay_level = 0;          // Current envelope volume (counts down 15->0)
-    uint8_t divider = 0;              // Divider countdown (reloads from volume_period)
+    // Also serves as length counter halt
+    bool loop_flag = false;
+
+    // true = use volume directly, false = use decay
+    bool constant_volume_flag = false;
+
+    // 4 bits: either constant volume OR envelope period
+    uint8_t volume_period = 0;
+
+    //  Internal state
+    // Set when note starts, triggers envelope restart
+    bool start_flag = false;
+
+    // Current envelope volume (counts down 15->0)
+    uint8_t decay_level = 0;
+
+    // Divider countdown (reloads from volume_period)
+    uint8_t divider = 0;
 
     // Clock the envelope (called on quarter-frame)
     void clock();
@@ -78,21 +94,35 @@ public:
 //    Pulse 2 adds the two's complement (−c). Making 20 negative produces a change amount of −20.
 //    Whenever the current period or sweep setting changes, whether by $400x writes or by sweep updating the period,
 //    the target period also changes.
-//
+
 class SweepUnit {
 public:
+
     //  configuration set by CPU writes to $4001/$4005
-    bool enabled = false;             // sweep on/off
-    uint8_t period = 0;               // divider period (3 bits, 0-7)
-    bool negate = false;              // false = add (pitch down), true = subtract (pitch up)
-    uint8_t shift = 0;                // 3-bit shift amount for period adjustment SSS = 0 behaves like enabled = false
+
+    // sweep on/off
+    bool enabled = false;
+
+    // divider period (3 bits, 0-7)
+    uint8_t period = 0;
+
+    // false = add (pitch down), true = subtract (pitch up)
+    bool negate = false;
+
+    // 3-bit shift amount for period adjustment SSS = 0 behaves like enabled = false
+    uint8_t shift = 0;
 
     //  internal state
-    bool reload_flag = false;         // set when sweep register written
-    uint8_t divider = 0;              // current divider countdown
+    // set when sweep register written
+    bool reload_flag = false;
+
+    // current divider countdown
+    uint8_t divider = 0;
 
     //  channel identity (affects negation calculation)
-    bool is_pulse1 = true;            // Pulse 1 uses one's complement negation
+    // Pulse 1 uses one's complement negation
+    // Pulse 2 uses two's complement negation
+    bool is_pulse1 = true;
 
     // calculate target period given current period
     // returns the period the channel would have after one sweep adjustment
@@ -131,12 +161,15 @@ public:
 //   0x00: 10    0x01: 254   0x02: 20    0x03: 2
 //   0x04: 40    0x05: 4     0x06: 80    0x07: 6
 //   ... and so on (see implementation for full table)
-//
+
 class LengthCounter {
 public:
-    bool halt = false;                // when true, counter doesn't decrement
 
-    uint8_t counter = 0;              // current counter value
+    // when true, counter doesn't decrement
+    bool halt = false;
+
+    // current counter value
+    uint8_t counter = 0;
 
     // load counter from lookup table called when $4003/$4007 written
     void load(uint8_t index);
@@ -198,9 +231,13 @@ public:
     // Timer controls frequency
     // The timer is an 11-bit value (0-2047). The actual period in CPU cycle is (timer_period + 1) * 2 where
     // lower values = higher frequency.
-    uint16_t timer_period = 0;        // 11-bit period value from registers $4002 + lower 3 bits of $4003 for pulse 1
-                                      // and $4006 (low) + $4007's lower 3 bits (high) for pulse 2
-    uint16_t timer_counter = 0;       // current countdown value
+
+    // 11-bit period value from registers $4002 + lower 3 bits of $4003 for pulse 1
+    // and $4006 (low) + $4007's lower 3 bits (high) for pulse 2
+    uint16_t timer_period = 0;
+
+    // countdown timer that reloads from table and clocks the shift register on 0
+    uint16_t timer_counter = 0;
 
     //  Duty cycle sequencer 
     // (8-step sequence, 4 different duty patterns)
@@ -211,8 +248,12 @@ public:
     //   75%:   1 0 0 1 1 1 1 1  (6 high, 2 low)
     // The sequencer steps through 8 positions, outputting 0 or 1 based on
     // the selected duty cycle pattern.
-    uint8_t duty_mode = 0;            // 0-3: selects one of 4 duty patterns
-    uint8_t sequencer_position = 0;   // 0-7: current position in sequence
+
+    // 0-3: selects one of 4 duty patterns
+    uint8_t duty_mode = 0;
+
+    // 0-7: current position in sequence
+    uint8_t sequencer_position = 0;
 
     //  channel state
     bool enabled = false;             // set via $4015 status register
@@ -271,36 +312,52 @@ class Triangle {
 public:
     LengthCounter length_counter;
 
-    //  set by bit 7 of $4008
-    // This bit is also the length counter halt flag
+    // set by bit 7 of $4008
+    // this bit is also the length halt
     bool control_flag = false;
 
     // set by low 6-0 bits of $4008
-    // linear counter is reloaded with this value if control_flag is set
+    // linear counter is reloaded with this value if linear_reload_flag is set
     uint8_t counter_reload_value = 0;
 
-    // Timer controls frequency
-    // The timer is an 11-bit value (0-2047). Unlike Pulse, Triangle timer ticks at the rate of the CPU clock.
-    uint16_t timer_period = 0;        // 11-bit period value from lower 3 bits of $400B (high) + $400A (low)
+    // linear counter is clocked by the frame counter not the triangle timer
+    uint8_t linear_counter = 0;
+
+    // when set, linear_counter is reloaded from counter_reload_value
+    // cleared only if control_flag == 0 after the clock
+    bool linear_reload_flag = false;
+
+    // timer_period controls frequency
+    // the timer is an 11-bit value (0-2047). Unlike Pulse, Triangle timer ticks at the rate of the CPU clock.
+    // 11-bit period value from lower 3 bits of $400B (high) + $400A (low)
+    uint16_t timer_period = 0;
+
+    // countdown timer reloads from timer_period and clocks the sequencer when it reaches 0
+    uint16_t timer_counter = 0;
+
+    // index into sequencer table
+    uint8_t sequencer_step = 0;
 
     // The sequencer is clocked by the timer as long as both the linear counter and the length counter are nonzero.
     // The sequencer sends the following looping 32-step sequence of values to the mixer:
     // 15, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  4,  3,  2,  1,  0
     // 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15
-    static const uint8_t SEQUENCER_TABLE[2][16];
+    static const uint8_t SEQUENCER_TABLE[32];
 
     // write to channel registers
     void write_register(uint8_t reg, uint8_t value);
 
-    // clock the timer called every APU cycle = every 2 CPU cycles
+    // clock the timer called every APU cycle = every CPU cycle (Triangle only!)
     void clock_timer();
+
+    // clock the linear counter by the frame counter
+    void clock_linear_counter();
 
     // get current output sample (0-15)
     uint8_t output() const;
 
     // reset all triangle state
     void reset();
-
 };
 
 // From: https://www.nesdev.org/wiki/APU_Noise
@@ -337,12 +394,11 @@ public:
     uint16_t timer_counter = 0;
 
     // The timer period is set to the entry timer_period_index of a lookup table
-    // which represents how many APU cycles happen between shift register clocks (half the CPU-cycle values
-    // shown on NES Dev Wiki).
-    // We only implement NTSC periods and ignore the 16 possible PAL values,
-    // so a 1-dimension table suffices.
-    // The index corresponds to $400E bits 3–0 of timer_period_index.
-    // We inline to reduce confusion.
+    // which represents how many APU cycles happen between shift register clocks
+    // (half the CPU-cycle values shown on NES Dev Wiki).
+    // We only implement NTSC periods and ignore the 16 possible PAL values, so
+    // a 1-dimension table suffices. The index corresponds to $400E bits 3–0
+    // of timer_period_index. We inline to reduce confusion.
     inline static constexpr uint16_t TIMER_PERIOD_IN_APU_TICKS[16] = {
         2,    // $0:  4  CPU cycles
         4,    // $1:  8
@@ -380,8 +436,14 @@ public:
     // We store teh 15-bit LFSR state in a uint16_t and updated with bit operations.
     uint16_t shift_register_state = 1;
 
+    // write to channel registers
+    void write_register(uint8_t reg, uint8_t value);
+
     // clock the timer called every APU cycle = every 2 CPU cycles
     void clock_timer();
+
+    // clock envelope called on frame counter quarter-frame see clock_quarter_frame() in APU class
+    void clock_envelope();
 
     // clock the shift register
     void clock_shift_register();
@@ -393,15 +455,180 @@ public:
     void reset();
 };
 
+// From https://www.nesdev.org/wiki/APU#Glossary
+// The delta modulation channel outputs a 7-bit PCM signal from a counter that can be driven by DPCM samples.
+// DPCM samples are stored as a stream of 1-bit deltas that control the 7-bit PCM counter that the channel outputs.
+// A bit of 1 will increment the counter, 0 will decrement, and it will clamp rather than overflow if the 7-bit range
+// is exceeded.
+// DPCM samples may loop if the loop flag in $4010 is set, and the DMC may be used to generate an IRQ when the end of
+// the sample is reached if its IRQ flag is set.
+// The playback rate is controlled by register $4010 with a 4-bit frequency index value (see APU DMC for frequency
+// lookup tables).
+// DPCM samples must begin in the memory range $C000–$FFFF at an address set by register $4012
+// (address = %11AAAAAA AA000000).
+// The length of the sample in bytes is set by register $4013 (length = %LLLL LLLL0001).
+// The $4011 register can be used to play PCM samples directly by setting the counter value at a high frequency.
+// Because this requires intensive use of the CPU, when used in games all other gameplay is usually halted to f
+// acilitate this.
+// Because of the APU's nonlinear mixing, a high value in the PCM counter reduces the volume of the triangle and
+// noise channels. This is sometimes used to apply limited volume control to the triangle channel (e.g. Super
+// Mario Bros. adjusts the counter between levels to accomplish this).
+// The DMC's IRQ can be used as an IRQ-based timer when the mapper used does not have one available.
+class DeltaModulationChannel
+{
+public:
 
+    // bit 7 of $4010
+    // if true, DMC may assert IRQ when the sample finishes and loop is off
+    // otherwise DMC may not issue IRQs
+    bool irq_enable = false;
+
+    // this is the IRQ to the CPU
+    // set when bytes_remaining = 0 and loop == false adn irq_enable == true
+    // cleared when CPU writes anything to APU status register $4015
+    bool irq_pending = false;
+
+    // $4015 bit 4 controls whether DMC runs
+    bool enabled = false;
+
+    // bit 6 of $4010
+    bool loop = false;
+
+    // rate index
+    // rate determines for how many CPU cycles happen between changes in
+    // the output level during automatic delta-encoded playback..
+    uint8_t rate_index = 0;
+
+    // 7 bits of $4011
+    uint8_t output_level = 0;
+
+    // all of $4012 AAAA.AAAA
+    // Sample address = %11AAAAAA.AA000000 = $C000 + (A * 64)
+    uint8_t sample_address = 0;
+
+    // all of $4013 LLLL.LLLL
+    // Sample length = %LLLL.LLLL0001 = (L * 16) + 1 bytes
+    uint8_t sample_length = 0;
+
+    // rate table
+    // The rate determines for how many CPU cycles happen between changes in the
+    // output level during automatic delta-encoded sample playback. For example,
+    // on NTSC (1.789773 MHz), a rate of 428 gives a frequency of
+    // 1789773/428 Hz = 4181.71 Hz. Inlined to reduce confusion and risk.
+    // NES Dev Wiki has these values doubled because it assumes 1 CPU per APU clock,
+    // but we are clocking our APU for every two CPU clocks already, so we halve the values
+    // here.
+    // see https://www.nesdev.org/wiki/APU_DMC#Pitch_table for full pitch table
+    inline static constexpr uint16_t RATE[16] = {
+        214, // $0
+        190, // $1
+        170, // $2
+        160, // $3
+        143, // $4
+        127, // $5
+        113, // $6
+        107, // $7
+        95, // $8
+        80, // $9
+        71, // $A
+        64, // $B
+        53, // $C
+        42, // $D
+        36, // $E
+        27 // $F
+    };
+
+    // memory reader state values
+    // TODO: separate class?
+
+    // The sample buffer either holds a single 8-bit sample byte or is empty. It is filled
+    // by the reader and can only be emptied by the output unit; once loaded with a sample
+    // byte it will be played back when output unit reaches the end of a byte
+    uint8_t sample_buffer = 0;
+
+    // sample buffer either holds a single 8-bit sample byte or is empty
+    bool sample_buffer_full = false;
+
+    // offset into sample
+    uint16_t current_address = 0;
+
+    // how many bytes of the current sample are left to be played
+    uint16_t bytes_remaining = 0;
+
+    // output unit state values
+    // TODO: separate class?
+    // Nothing can interrupt a cycle; every cycle runs to completion before a new cycle is started.
+
+    // countdown timer that reloads from RATE[rate_index]
+    // we decrement timer_counter once per APU tick and never do halving
+    // because our inline table has already been halved.
+    uint16_t timer_counter = 0;
+
+    // holds the current 8 bits loaded from the sample buffer on every output cycle end
+    uint8_t shift_reg = 0;
+
+    // The bits remaining counter is updated whenever a timer outputs a clock regardless
+    // of whether a sample is currently playing. When this counter reaches zero, we say
+    // teh output cycle ends.  The DPCM unit can only transition from silent to playing
+    // at the end of an output cycle. See https://www.nesdev.org/wiki/APU_DMC#Output_unit
+    uint8_t bits_remaining = 0;
+
+    // output_level is not changed when silence is true
+    bool silence = false;
+
+    // write to channel registers
+    void write_register(uint8_t reg, uint8_t value);
+
+    // when a sample is (re)started, the current address is set to the sample address,
+    // and bytes remaining is set to the sample length.
+    void play_sample();
+
+    // attempts to fill sample_buffer if empty and bytes_remaining > 0.
+    // returns true if a fetch occurred.
+    // consumes byte, bumps address and may wrap, may trigger loop, needs to stall CPU somehow.
+    // see https://www.nesdev.org/wiki/APU_DMC#Memory_reader for tricky implementation
+    // guidance.
+    // TODO: improve comment to explain trickiness
+    bool fetch_sample_byte();
+
+    // Memory interface for DMC sample reads
+    // DMC needs to read sample bytes from CPU address space ($C000-$FFFF)
+    Memory* memory = nullptr;
+
+    // connect to memory subsystem for DMC sample reads
+    void attach_memory(Memory* m);
+
+    // CPU stall cycles pending from DMC sample fetches
+    // DMC sample fetches cause CPU stalls due to bus contention (typically 1-4 cycles)
+    // check this after each APU step and apply stalls to CPU
+    uint8_t pending_stall_cycles = 0;
+
+    // clock the timer called every APU cycle = every 2 CPU cycles
+    void clock_timer();
+
+    // helper method to handle output operations
+    void clock_output_unit();
+
+    // helper method to handle sample buffer operations
+    // calls fetch_sample_byte() whenever sample buffer is empty and
+    // there are bytes remaining no matter whether output unit is silent
+    void clock_memory_unit();
+
+    // get current 7-bit output sample (0-127)
+    uint8_t output() const;
+
+    // reset all dmc state
+    void reset();
+};
 
 // The main APU class contains all audio channels and the frame counter.
 // Based on https://www.nesdev.org/wiki/APU#Pulse_($4000–$4007)
 //
 // From https://www.nesdev.org/wiki/APU_Frame_Counter
 // The frame counter generates clocks for the envelope, length counter, and
-// sweep units. It can operate in two modes defined by $4017 depending how it is configured. It may optionally issue an IRQ on the last tick of the 4-step sequence.
-//    The following diagram illustrates the two modes, selected by bit 7 of $4017:
+// sweep units. It can operate in two modes defined by $4017 depending how it is configured.
+// It may optionally issue an IRQ on the last tick of the 4-step sequence.
+// The following diagram illustrates the two modes, selected by bit 7 of $4017:
 //    mode 0:    mode 1:       function
 //    -  ---  -
 //     - - - f    - - - - -    IRQ (if bit 6 is clear)
@@ -441,8 +668,9 @@ public:
     PulseChannel pulse2{false};  // false = is pulse 2
     Triangle triangle;
     Noise noise;
+    DeltaModulationChannel dmc;
 
-    // TODO: Mixer, and DMC
+    // TODO: Mixer
 
     //  frame counter
     uint16_t frame_counter_cycles = 0;  // Cycle counter for frame sequencer
@@ -452,7 +680,7 @@ public:
     bool frame_irq_flag = false;        // Frame IRQ pending
 
     //  register interface
-    // writes to these should go through write_register()
+    //  writes to these should go through write_register()
     uint8_t $4000 = 0, $4001 = 0, $4002 = 0, $4003 = 0;  // Pulse 1
     uint8_t $4004 = 0, $4005 = 0, $4006 = 0, $4007 = 0;  // Pulse 2
     uint8_t $4008 = 0, $4009 = 0, $400A = 0, $400B = 0;  // Triangle
