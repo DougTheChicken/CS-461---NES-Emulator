@@ -19,7 +19,42 @@ namespace nes
 
     void APU::clock_frame_counter()
     {
-        ;
+        frame_counter_cycles++;
+
+        // https://www.nesdev.org/wiki/APU_Frame_Counter
+        // We only support NTSC timings
+        if (frame_counter_mode) // 5-step mode
+        {
+            switch (frame_counter_cycles)
+            {
+                case 3728: clock_quarter_frame(); break;
+                case 7456: clock_quarter_frame(); clock_half_frame(); break;
+                case 11185: clock_quarter_frame(); break;
+                case 14914: break; // silent step. ssssshhh...
+                case 18640: clock_quarter_frame(); clock_half_frame(); frame_counter_cycles = 0; break;
+                // In this mode, the frame interrupt flag is never set.
+            }
+        }
+        else // 4-step  mode
+        {
+            switch (frame_counter_cycles)
+            {
+                case 3728: clock_quarter_frame(); break;
+                case 7456: clock_quarter_frame(); clock_half_frame(); break;
+                case 11185: clock_quarter_frame(); break;
+                case 14914:
+                    {
+                        clock_quarter_frame();
+                        clock_half_frame();
+
+                        // frame interrupt flag gets set if interrupt inhibit is clear
+                        if (!frame_irq_inhibit) frame_irq_flag = true;
+
+                        frame_counter_cycles = 0;
+                        break;
+                    }
+            }
+        }
     }
 
     void APU::clock_half_frame()
