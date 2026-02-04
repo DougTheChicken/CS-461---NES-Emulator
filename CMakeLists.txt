@@ -70,6 +70,7 @@ add_executable(nes_emu ${PROJECT_SOURCE_DIR}/src/main.cpp
         include/nes/timing.hpp
         include/nes/apu.hpp
         src/nes/ROM.cpp
+        src/nes/apu.cpp
 )
 target_link_libraries(nes_emu PRIVATE nes_lib SDL2::SDL2)
 
