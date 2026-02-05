@@ -622,38 +622,6 @@ public:
 
 // The main APU class contains all audio channels and the frame counter.
 // Based on https://www.nesdev.org/wiki/APU#Pulse_($4000–$4007)
-//
-// From https://www.nesdev.org/wiki/APU_Frame_Counter
-// The frame counter generates clocks for the envelope, length counter, and
-// sweep units. It can operate in two modes defined by $4017 depending how it is configured.
-// It may optionally issue an IRQ on the last tick of the 4-step sequence.
-// The following diagram illustrates the two modes, selected by bit 7 of $4017:
-//    mode 0:    mode 1:       function
-//    -  ---  -
-//     - - - f    - - - - -    IRQ (if bit 6 is clear)
-//     - l - l    - l - - l    Length counter and sweep
-//     e e e e    e e e - e    Envelope and linear counter
-//
-// 4-step mode (mode bit = 0):
-//   Step 1: Clock envelope
-//   Step 2: Clock envelope + length/sweep
-//   Step 3: Clock envelope
-//   Step 4: Clock envelope + length/sweep, set IRQ flag
-//   (Then loops back to step 1)
-//
-// 5-step mode (mode bit = 1):
-//   Step 1: Clock envelope
-//   Step 2: Clock envelope + length/sweep
-//   Step 3: Clock envelope
-//   Step 4: Clock envelope + length/sweep
-//   Step 5: (nothing)
-//   (Then loops back to step 1)
-//   In this mode, the frame interrupt flag is never set.
-//
-// Note that the frame counter is not exactly synchronized with the PPU NMI;
-// it runs independently at a consistent rate which is approximately 240Hz (NTSC) in 4-step mode.
-// Some games (e.g. The Legend of Zelda, Super Mario Bros.) manually synchronize it by
-// writing $C0 or $FF to $4017 once per frame.
 
 class APU {
 public:
@@ -713,8 +681,8 @@ private:
     void clock_quarter_frame();  // envelope
     void clock_half_frame();     // length counter + sweep
 
-    // APU cycle counter for timing frame counterew
-    uint64_t cycle_count = 0;
+    // CPU cycle counter for timing frame counter
+    uint64_t cpu_cycle = 0;
 
     // surface last write to status for per-channel access
     uint8_t status_enable = 0;

@@ -12,7 +12,7 @@ namespace nes
         status_enable = 0;
         frame_counter_mode = false;
         frame_irq_flag = false;
-        cycle_count = 0;
+        cpu_cycle = 0;
 
         // clear status
         write_register($4015, 0x00);
@@ -26,6 +26,37 @@ namespace nes
 
     // https://www.nesdev.org/wiki/APU_Frame_Counter
     // We only support NTSC timings
+    // From https://www.nesdev.org/wiki/APU_Frame_Counter
+    // The frame counter generates clocks for the envelope, length counter, and
+    // sweep units. It can operate in two modes defined by $4017 depending how it is configured.
+    // It may optionally issue an IRQ on the last tick of the 4-step sequence.
+    // The following diagram illustrates the two modes, selected by bit 7 of $4017:
+    //    mode 0:    mode 1:       function
+    //    -  ---  -
+    //     - - - f    - - - - -    IRQ (if bit 6 is clear)
+    //     - l - l    - l - - l    Length counter and sweep
+    //     e e e e    e e e - e    Envelope and linear counter
+    //
+    // 4-step mode (mode bit = 0):
+    //   Step 1: Clock envelope
+    //   Step 2: Clock envelope + length/sweep
+    //   Step 3: Clock envelope
+    //   Step 4: Clock envelope + length/sweep, set IRQ flag
+    //   (Then loops back to step 1)
+    //
+    // 5-step mode (mode bit = 1):
+    //   Step 1: Clock envelope
+    //   Step 2: Clock envelope + length/sweep
+    //   Step 3: Clock envelope
+    //   Step 4: Clock envelope + length/sweep
+    //   Step 5: (nothing)
+    //   (Then loops back to step 1)
+    //   In this mode, the frame interrupt flag is never set.
+    //
+    // Note that the frame counter is not exactly synchronized with the PPU NMI;
+    // it runs independently at a consistent rate which is approximately 240Hz (NTSC) in 4-step mode.
+    // Some games (e.g. The Legend of Zelda, Super Mario Bros.) manually synchronize it by
+    // writing $C0 or $FF to $4017 once per frame.
     void APU::clock_frame_counter()
     {
         frame_counter_cycles++;
@@ -143,10 +174,29 @@ namespace nes
     }
 
     // From https://www.nesdev.org/wiki/APU_Frame_Counter
+    // $4017 	MI-- ---- 	Mode (M, 0 = 4-step, 1 = 5-step), IRQ inhibit flag (I)
     // write APU frame counter ($4017)
     void APU::write_frame_counter(uint8_t value)
     {
-        ;
+        frame_irq_inhibit = (value & 0x40) != 0;
+
+        // Sequencer mode: 0 selects 4-step sequence, 1 selects 5-step sequence
+        frame_counter_mode = (value & 0x80) != 0;
+
+        // "If interrupt inhibit flag set, the frame interrupt flag is cleared,
+        // otherwise it is unaffected."
+        if (frame_irq_inhibit) frame_irq_flag = false;
+
+        // reset sequencer after clearing flag
+        frame_counter_step = 0;
+        frame_counter_cycles = 0;
+
+        // side effect: if mode is set then both quarter frame and half frame generated
+        if (frame_counter_mode)
+        {
+            clock_quarter_frame();
+            clock_half_frame();
+        }
     }
 
     // From https://www.nesdev.org/wiki/APU#Status_($4015)
@@ -188,19 +238,19 @@ namespace nes
         return status;
     }
 
-    // this step() is designed to tick once per CPU cycle for simplicity
+    // Invariant: always call write_register() before step() in CPU cycle, and only once per cycle for each
     void APU::step()
     {
         // TODO: verify order of operations herein
-        cycle_count++;
+        cpu_cycle++;
         clock_frame_counter();
 
         // clock all the channel timers.
-        // triangle on every APU tick
+        // triangle ticks on every CPU cycle
         triangle.clock_timer();
 
-        // and others on every other APU tick
-        if (!(cycle_count & 1)) // if not odd
+        // and others tick on every other CPU cycle
+        if (!(cpu_cycle & 1)) // if not odd
         {
             pulse1.clock_timer();
             pulse2.clock_timer();
