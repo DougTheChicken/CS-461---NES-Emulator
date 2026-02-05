@@ -122,6 +122,20 @@ namespace nes
     }
 
     // From https://www.nesdev.org/wiki/APU#Status_($4015)
+    // write APU status ($4015)
+    void write_status(uint8_t value)
+    {
+        ;
+    }
+
+    // From https://www.nesdev.org/wiki/APU_Frame_Counter
+    // write APU frame counter ($4017)
+    void write_frame_counter(uint8_t value)
+    {
+        ;
+    }
+
+    // From https://www.nesdev.org/wiki/APU#Status_($4015)
     // $4015 read IF-D NT21
     uint8_t APU::read_status()
     {
@@ -181,9 +195,49 @@ namespace nes
         }
     }
 
+    // from https://www.nesdev.org/wiki/APU_registers
     void APU::write_register(uint16_t address, uint8_t value)
     {
-        ;
+        // don't trust inputs in exposed interfaces
+        if (address < 0x4000 || address > 0x4017)
+            return;
+
+        switch (address)
+        {
+        case 0x4015: write_status(value); return;
+        case 0x4017: write_frame_counter(value); return;
+
+        // 0x4000 - 0x4003 pulse 1
+        case 0x4000:
+        case 0x4001:
+        case 0x4002:
+        case 0x4003: pulse1.write_register(address - 0x4000, value); return;
+
+        // 0x4004 - 0x4007 pulse 2
+        case 0x4004:
+        case 0x4005:
+        case 0x4006:
+        case 0x4007: pulse2.write_register(address - 0x4004, value); return;
+
+        // 0x4008 - 0x400B triangle
+        case 0x4008:
+        case 0x4009:    // not implemented in triangle
+        case 0x400A:
+        case 0x400B: triangle.write_register(address - 0x4008, value); return;
+
+        // 0x400C - 0x400F noise
+        case 0x400C:
+        case 0x400D:    // not implemented in noise
+        case 0x400E:
+        case 0x400F: noise.write_register(address - 0x400C, value); return;
+
+        // 0x4010 - 0x4013 dmc
+        case 0x4010:
+        case 0x4011:
+        case 0x4012:
+        case 0x4013: dmc.write_register(address - 0x4010, value); return;
+        default: return;
+        }
     }
 
     PulseChannel::PulseChannel(bool is_pulse1)
@@ -222,6 +276,57 @@ namespace nes
         ;
     }
 
+    void Envelope::clock()
+    {
+        ;
+    }
+
+    uint8_t Envelope::output() const
+    {
+        return 1;
+    }
+
+    void Envelope::reset()
+    {
+
+    }
+
+    void LengthCounter::clock()
+    {
+        ;
+    }
+
+    void LengthCounter::load(uint8_t index)
+    {
+        ;
+    }
+
+    void LengthCounter::reset()
+    {
+        ;
+    }
+
+    bool SweepUnit::clock(uint16_t& timer_period)
+    {
+        // TODO: fix naive implementation
+        return true;
+    }
+
+    uint16_t SweepUnit::calculate_target_period(uint16_t current_period) const
+    {
+        return 1;
+    }
+
+    bool SweepUnit::is_muting(uint16_t current_period) const
+    {
+        // TODO: fix naive implementation
+        return true;
+    }
+
+    void SweepUnit::reset()
+    {
+        ;
+    }
 
     void Triangle::reset()
     {
@@ -275,58 +380,6 @@ namespace nes
     }
 
     void Noise::reset()
-    {
-        ;
-    }
-
-    void Envelope::clock()
-    {
-        ;
-    }
-
-    uint8_t Envelope::output() const
-    {
-        return 1;
-    }
-
-    void Envelope::reset()
-    {
-
-    }
-
-    void LengthCounter::clock()
-    {
-        ;
-    }
-
-    void LengthCounter::load(uint8_t index)
-    {
-        ;
-    }
-
-    void LengthCounter::reset()
-    {
-        ;
-    }
-
-    bool SweepUnit::clock(uint16_t& timer_period)
-    {
-        // TODO: fix naive implementation
-        return true;
-    }
-
-    uint16_t SweepUnit::calculate_target_period(uint16_t current_period) const
-    {
-        return 1;
-    }
-
-    bool SweepUnit::is_muting(uint16_t current_period) const
-    {
-        // TODO: fix naive implementation
-        return true;
-    }
-
-    void SweepUnit::reset()
     {
         ;
     }

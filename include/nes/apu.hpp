@@ -689,6 +689,12 @@ public:
     // write to APU register
     void write_register(uint16_t address, uint8_t value);
 
+    // write APU status ($4015)
+    void write_status(uint8_t value);
+
+    // write APU frame counter ($4017)
+    void write_frame_counter(uint8_t value);
+
     // read APU status ($4015)
     uint8_t read_status();
 
