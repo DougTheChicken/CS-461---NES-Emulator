@@ -4,6 +4,7 @@ namespace nes
 {
     APU::APU() { reset(); }
 
+    // safe for start and reset
     void APU::reset()
     {
         frame_counter_step = 0;
@@ -22,12 +23,12 @@ namespace nes
         dmc.reset();
     };
 
+    // https://www.nesdev.org/wiki/APU_Frame_Counter
+    // We only support NTSC timings
     void APU::clock_frame_counter()
     {
         frame_counter_cycles++;
 
-        // https://www.nesdev.org/wiki/APU_Frame_Counter
-        // We only support NTSC timings
         if (frame_counter_mode) // 5-step mode
         {
             switch (frame_counter_cycles)
@@ -159,9 +160,25 @@ namespace nes
         return status;
     }
 
+    // this step() is designed to tick once per CPU cycle for simplicity
     void APU::step()
     {
-        ;
+        // TODO: verify order of operations herein
+        cycle_count++;
+        clock_frame_counter();
+
+        // clock all the channel timers.
+        // triangle on every APU tick
+        triangle.clock_timer();
+
+        // and others on every other APU tick
+        if (!(cycle_count & 1)) // if not odd
+        {
+            pulse1.clock_timer();
+            pulse2.clock_timer();
+            noise.clock_timer();
+            dmc.clock_timer();
+        }
     }
 
     void APU::write_register(uint16_t address, uint8_t value)
