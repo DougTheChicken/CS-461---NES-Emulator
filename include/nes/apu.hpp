@@ -34,15 +34,14 @@ class Memory;
 // length counter.
 //                                    Loop flag
 //                                         |
-//                Start flag  +.   |   Constant volume
+//                        Start flag  +.   |   Constant volume
 //                            |        |   |        flag
 //                            v        v   v          |
 // Quarter frame clock --> Divider --> Decay --> |    |
 //                            ^        level     |    v
 //                            |                  | Select --> Envelope output
 //                            |                  |
-//         Envelope parameter +> |
-
+//                         Envelope parameter +> |
 class Envelope {
 public:
     //  Configuration (set by CPU writes to $4000/$4004)

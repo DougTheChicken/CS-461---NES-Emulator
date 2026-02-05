@@ -120,9 +120,42 @@ namespace nes
         return 0.0f;
     }
 
+    // From https://www.nesdev.org/wiki/APU#Status_($4015)
+    // $4015 read IF-D NT21
     uint8_t APU::read_status()
     {
-        return 1;
+        uint8_t status = 0;
+
+        // bits 0-3: channels are considered enabled if its length counter is non-zero
+        // "length counter > 0 (N/T/2/1)"
+        if (pulse1.length_counter.counter > 0) status |= 0x01;
+        if (pulse2.length_counter.counter > 0) status |= 0x02;
+        if (triangle.length_counter.counter > 0) status |= 0x04;
+        if (noise.length_counter.counter > 0) status |= 0x08;
+
+        // bit 4: D will read as 1 if the DMC bytes remaining is more than 0.
+        if (dmc.bytes_remaining > 0) status |= 0x10;
+
+        // bit 5 is open bus so never |= 0x20.
+        // Because the external bus is disconnected when reading $4015,
+        // the open bus value comes from the last cycle that did not read $4015,
+
+        // bit 6 frame interrupt (F)
+        if (frame_irq_flag) status |= 0x40;
+
+        // bit 7: the tricky bit-- DMC interrupt (I) is irq_pending (not irq_enable)
+        if (dmc.irq_pending) status |= 0x80;
+
+        // reading $4015 clear frame interrupt.
+        frame_irq_flag = false;
+
+        // But NES Dev says: If an interrupt flag was
+        // set at the same moment of the read, it will read back as 1
+        // but it will not be cleared. We do not emulate this behavior
+        // which nesttest ROM says is fine.
+        // TODO: determine if this level of APU/CPU sync is necessary
+
+        return status;
     }
 
     void APU::step()
