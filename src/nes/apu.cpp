@@ -3,13 +3,18 @@
 namespace nes
 {
     APU::APU() { reset(); }
+
     void APU::reset()
     {
         frame_counter_step = 0;
-        frame_counter_step = 0;
+        frame_counter_cycles = 0;
         frame_counter_mode = false;
         frame_irq_flag = false;
         cycle_count = 0;
+
+        // clear status
+        write_register($4015, 0x00);
+
         pulse1.reset();
         pulse2.reset();
         triangle.reset();
@@ -75,9 +80,44 @@ namespace nes
         triangle.clock_linear_counter();
     }
 
+    // see https://www.nesdev.org/wiki/APU_Mixer
+    // output = pulse_out + tnd_out
+    // this is NOT efficient, but it is highly accurate and should be fast
+    // on modern hardware, as required by NES-EMU specification
+    // TODO: optionally consider implementing high- and low-pass filters
     float APU::get_output() const
     {
-        return 1.1;
+        return get_pulse_output() + get_tnd_output();
+    }
+
+    // pulse audio output
+    //                          95.88
+    // pulse_out = ------------------------------------
+    //              (8128 / (pulse1 + pulse2)) + 100
+    float APU::get_pulse_output() const
+    {
+        const float pulse_sum = pulse2.output() + pulse1.output(); // NOLINT(*-narrowing-conversions)
+        if (pulse_sum > 0.0f)
+            return 95.88f / ((8128.0f / pulse_sum) + 100.0f);
+        return 0.0f;
+    }
+
+    // triangle-noise-dmc output formula from https://www.nesdev.org/wiki/APU_Mixer
+    //
+    //                              159.79
+    // tnd_out = -------------------------------------------------------------
+    //                                  1
+    //           ----------------------------------------------------- + 100
+    //           (triangle / 8227) + (noise / 12241) + (dmc / 22638)
+    float APU:: get_tnd_output() const
+    {
+        const float t = triangle.output();
+        const float n = noise.output();
+        const float d = dmc.output();
+        const float tnd_sum = (t / 8227.0f) + (n / 12241.0f) + (d /22638.0f);
+        if (tnd_sum > 0.0f)
+            return 159.79f / ((1.0f / tnd_sum) + 100.0f);
+        return 0.0f;
     }
 
     uint8_t APU::read_status()

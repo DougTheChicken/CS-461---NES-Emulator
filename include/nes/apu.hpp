@@ -670,8 +670,6 @@ public:
     Noise noise;
     DeltaModulationChannel dmc;
 
-    // TODO: Mixer
-
     //  frame counter
     uint16_t frame_counter_cycles = 0;  // Cycle counter for frame sequencer
     uint8_t frame_counter_step = 0;     // Current step (0-3 or 0-4)
@@ -697,6 +695,12 @@ public:
 
     // mixed audio output
     float get_output() const;
+
+    // pulse audio output
+    float get_pulse_output() const;
+
+    // triangle-noise-dmc output
+    float get_tnd_output() const;
 
 private:
     // clock frame counter components
