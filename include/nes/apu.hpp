@@ -715,6 +715,9 @@ private:
 
     // APU cycle counter for timing frame counterew
     uint64_t cycle_count = 0;
+
+    // surface last write to status for per-channel access
+    uint8_t status_enable = 0;
 };
 
 } // namespace nes

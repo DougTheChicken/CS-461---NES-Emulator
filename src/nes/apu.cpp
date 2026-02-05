@@ -9,6 +9,7 @@ namespace nes
     {
         frame_counter_step = 0;
         frame_counter_cycles = 0;
+        status_enable = 0;
         frame_counter_mode = false;
         frame_irq_flag = false;
         cycle_count = 0;
@@ -122,15 +123,28 @@ namespace nes
     }
 
     // From https://www.nesdev.org/wiki/APU#Status_($4015)
-    // write APU status ($4015)
-    void write_status(uint8_t value)
+    // write APU status ($4015). writing zero silences NT21; dmc finishes sample before silence
+    // 4-bits: ---D NT21 	Enable DMC (D), noise (N), triangle (T), and pulse channels (2/1)
+    void APU::write_status(uint8_t value)
     {
-        ;
+        status_enable = value & 0x1F; // mask to keep lower 4 bits
+
+        // clear length counter to silence NT21
+        if ((status_enable & 0x01) == 0) pulse1.length_counter.clear();
+        if ((status_enable & 0x02) == 0) pulse2.length_counter.clear();
+        if ((status_enable & 0x04) == 0) triangle.length_counter.clear();
+        if ((status_enable & 0x08) == 0) noise.length_counter.clear();
+
+        // dmc silence uses a flag to enable/disable
+        if ((status_enable & 0x10) == 0) dmc.enabled = false;
+
+        // "Writing to this register clears the DMC interrupt flag."
+        dmc.irq_pending = false;
     }
 
     // From https://www.nesdev.org/wiki/APU_Frame_Counter
     // write APU frame counter ($4017)
-    void write_frame_counter(uint8_t value)
+    void APU::write_frame_counter(uint8_t value)
     {
         ;
     }
