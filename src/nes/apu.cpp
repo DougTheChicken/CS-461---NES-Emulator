@@ -146,8 +146,9 @@ namespace nes
         // bit 7: the tricky bit-- DMC interrupt (I) is irq_pending (not irq_enable)
         if (dmc.irq_pending) status |= 0x80;
 
-        // reading $4015 clear frame interrupt.
+        // reading $4015 clear frame interrupt and the DMC interrupt
         frame_irq_flag = false;
+        dmc.irq_pending = false;
 
         // But NES Dev says: If an interrupt flag was
         // set at the same moment of the read, it will read back as 1
