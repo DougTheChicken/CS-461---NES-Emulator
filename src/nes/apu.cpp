@@ -466,15 +466,52 @@ namespace nes
         }
     }
 
+    // all comments below from https://www.nesdev.org/wiki/APU_Envelope
     void Envelope::clock()
     {
-        ;
+        // if the start flag is clear,
+        // the divider is clocked
+        if (!start_flag)
+        {
+            if (divider != 0) {divider--; }
+            else // When the divider is clocked while at 0
+            {
+                // it is loaded with V
+                divider = volume_period;
+
+                // and clocks the decay level counter.
+                // Then one of two actions occurs: If the counter is non-zero, it is decremented,
+                if (decay_level != 0) {decay_level--; }
+                else
+                {
+                    // otherwise if the loop flag is set, the decay level counter is loaded with 15.
+                    // take it from the top, maestro
+                    if (loop_flag) { decay_level = 15; }
+                }
+            }
+
+        }
+        else // otherwise
+        {
+            // the start flag is cleared,
+            start_flag = false;
+
+            // the decay level counter is loaded with 15,
+            decay_level = 15;
+
+            // and the divider's period is immediately reloaded.
+            divider = volume_period;
+        }
     }
 
-    uint8_t Envelope::output() const
-    {
-        return 1;
-    }
+
+    // from https://www.nesdev.org/wiki/APU_Envelope
+    // The envelope unit's volume output depends on the constant volume flag:
+    // if set, the envelope parameter directly sets the volume, otherwise the decay level is the current volume.
+    // The constant volume flag has no effect besides selecting the volume source;
+    // the decay level will still be updated when constant volume is selected
+    // so all we need to return is decay_level which is already 0..15
+    uint8_t Envelope::output() const { return decay_level; }
 
     void Envelope::reset()
     {
