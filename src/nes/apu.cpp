@@ -304,15 +304,10 @@ namespace nes
         }
     }
 
-    PulseChannel::PulseChannel(bool is_pulse1)
-    {
-        ;
-    }
+    // see https://www.nesdev.org/wiki/APU_Pulse
+    PulseChannel::PulseChannel(bool is_pulse1) { sweep.is_pulse1 = is_pulse1; }
 
-    void PulseChannel::clock_envelope()
-    {
-        envelope.clock();
-    }
+    void PulseChannel::clock_envelope() { envelope.clock(); }
 
     void PulseChannel::clock_length_and_sweep()
     {
@@ -322,17 +317,40 @@ namespace nes
 
     void PulseChannel::clock_timer()
     {
-        ;
+        // decrementing until we're done means playing the current note for the timer_period
+        // then advancing to the next step in the waveform sequence and playing that note
+        // for the timer period
+        if (timer_counter == 0)
+        {
+            // sequencer wraps 0..7
+            sequencer_position = (sequencer_position + 1) & 0x07;
+            timer_counter = timer_period;
+        }
+        else timer_counter--;
     }
 
+    // See https://www.nesdev.org/wiki/APU_Pulse#Pulse_channel_output_to_mixer
+    // relies on envelope output unless silenced for one of several reasons
     uint8_t PulseChannel::output() const
     {
-        return 1;
+        if (!enabled || length_counter.counter == 0 || timer_period < 8
+            || !DUTY_TABLE[duty_mode][sequencer_position] || sweep.is_muting(timer_period) )
+            return 0;
+        return envelope.output();
     }
 
+    // safe for start and reset
     void PulseChannel::reset()
     {
-        ;
+        enabled = false;
+        timer_counter = 0;
+        timer_period = 0;
+        duty_mode = 0;
+        sequencer_position = 0;
+
+        envelope.reset();
+        length_counter.reset();
+        sweep.reset();
     }
 
     void PulseChannel::write_register(uint8_t reg, uint8_t value)
