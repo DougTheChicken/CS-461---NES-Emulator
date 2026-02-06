@@ -326,8 +326,21 @@ namespace nes
             sequencer_position = (sequencer_position + 1) & 0x07;
             timer_counter = timer_period;
         }
-        else timer_counter--;
+        else
+        {
+            timer_counter--;
+        }
     }
+
+    // structured for our incrementing sequencer
+    const uint8_t PulseChannel::DUTY_TABLE[4][8] =
+    {
+        // 0  1  2  3  4  5  6  7   <- sequencer_position
+        { 0, 1, 0, 0, 0, 0, 0, 0 }, // 12.5%
+        { 0, 1, 1, 0, 0, 0, 0, 0 }, // 25%
+        { 0, 1, 1, 1, 1, 0, 0, 0 }, // 50%
+        { 1, 0, 0, 1, 1, 1, 1, 1 }  // 75%
+    };
 
     // See https://www.nesdev.org/wiki/APU_Pulse#Pulse_channel_output_to_mixer
     // relies on envelope output unless silenced for one of several reasons
@@ -353,9 +366,100 @@ namespace nes
         sweep.reset();
     }
 
+
+    // From https://www.nesdev.org/wiki/APU_Pulse#Registers
     void PulseChannel::write_register(uint8_t reg, uint8_t value)
     {
-        ;
+        // we always pass "address - $4000" or "address - $4003" or similar
+        // so normalizes reg to 0..3
+        switch (reg & 0x03)
+        {
+        // $4000/$4004
+        case 0:
+            {
+                // bits 3-0 envelope period
+                envelope.volume_period = value & 0x0F;
+
+                // bit 4 constant volume (1) and envelope decay (0)
+                envelope.constant_volume_flag = (value & 0x10) != 0;
+
+                // see https://www.nesdev.org/wiki/APU_Envelope
+                // bit 5 --L- ---- 	APU Length Counter halt flag/envelope loop flag
+                bool halt_or_loop = (value & 0x20) != 0;
+                length_counter.halt = halt_or_loop;
+                envelope.loop_flag = halt_or_loop;
+
+                // bits 7-6 duty_mode 0..3
+                // shift and isolate the 2 bits into duty_mode 0..3 values
+                duty_mode = (value >> 6) & 0x03;
+
+                // side effects duty cycle is changed but sequencer position unchanged
+                break;
+            }
+
+        // $4001/$4005
+        case 1:
+            {
+                // see https://www.nesdev.org/wiki/APU_Sweep
+                // EPPP.NSSS
+                // bit 7 	E--- ---- 	Enabled flag
+                sweep.enabled = (value & 0x80) != 0;
+
+                // bits 6-4 	-PPP ---- 	The divider's period is P + 1 half-frames
+                sweep.period  = (value >> 4) & 0x07;
+
+                // bit 3 	---- N--- 	Negate flag
+                // 0: add to period, sweeping toward lower frequencies
+                // 1: subtract from period, sweeping toward higher frequencies
+                sweep.negate  = (value & 0x08) != 0;
+
+                // bits 2-0 	---- -SSS 	Shift count (number of bits).
+                // If SSS is 0, then behaves like E=0.
+                sweep.shift   = value & 0x07;
+
+                // Side effects 	Sets the reload flag
+                sweep.reload_flag = true;
+
+                break;
+            }
+
+        // $4002/$4006
+        case 2:
+            {
+                // timer low 8 bits
+                // clear
+                timer_period &= 0x0700;
+
+                // set
+                timer_period |= value;
+
+                break;
+            }
+        // $4003/$4007
+        case 3:
+            {
+                // bits 2-0 timer high 3 bits
+                // clear high bits
+                timer_period &= 0x00FF;
+
+                // set high 3 bits
+                timer_period |= (value & 0x07) << 8;
+
+                // bits 7-3 length index 0..31
+                // see https://www.nesdev.org/wiki/APU_Length_Counter
+                // If the enabled flag is set, the length counter is loaded with entry L of the length table
+                // LLLL L--- >> 3 -> ---L LLLL &  0x1F -> 0..31 so
+                if (enabled)
+                    length_counter.load((value >> 3) & 0x1F);
+
+                // side effects - sequencer and envelope restarted, phase is reset
+                envelope.start_flag = true;
+                sequencer_position = 0;
+                timer_counter = timer_period; // TODO: test thoroughly
+
+                break;
+            }
+        }
     }
 
     void Envelope::clock()
