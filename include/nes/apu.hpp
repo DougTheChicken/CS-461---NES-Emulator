@@ -34,15 +34,14 @@ class Memory;
 // length counter.
 //                                    Loop flag
 //                                         |
-//                Start flag  +.   |   Constant volume
+//                        Start flag  +.   |   Constant volume
 //                            |        |   |        flag
 //                            v        v   v          |
 // Quarter frame clock --> Divider --> Decay --> |    |
 //                            ^        level     |    v
 //                            |                  | Select --> Envelope output
 //                            |                  |
-//         Envelope parameter +> |
-
+//                         Envelope parameter +> |
 class Envelope {
 public:
     //  Configuration (set by CPU writes to $4000/$4004)
@@ -623,38 +622,6 @@ public:
 
 // The main APU class contains all audio channels and the frame counter.
 // Based on https://www.nesdev.org/wiki/APU#Pulse_($4000–$4007)
-//
-// From https://www.nesdev.org/wiki/APU_Frame_Counter
-// The frame counter generates clocks for the envelope, length counter, and
-// sweep units. It can operate in two modes defined by $4017 depending how it is configured.
-// It may optionally issue an IRQ on the last tick of the 4-step sequence.
-// The following diagram illustrates the two modes, selected by bit 7 of $4017:
-//    mode 0:    mode 1:       function
-//    -  ---  -
-//     - - - f    - - - - -    IRQ (if bit 6 is clear)
-//     - l - l    - l - - l    Length counter and sweep
-//     e e e e    e e e - e    Envelope and linear counter
-//
-// 4-step mode (mode bit = 0):
-//   Step 1: Clock envelope
-//   Step 2: Clock envelope + length/sweep
-//   Step 3: Clock envelope
-//   Step 4: Clock envelope + length/sweep, set IRQ flag
-//   (Then loops back to step 1)
-//
-// 5-step mode (mode bit = 1):
-//   Step 1: Clock envelope
-//   Step 2: Clock envelope + length/sweep
-//   Step 3: Clock envelope
-//   Step 4: Clock envelope + length/sweep
-//   Step 5: (nothing)
-//   (Then loops back to step 1)
-//   In this mode, the frame interrupt flag is never set.
-//
-// Note that the frame counter is not exactly synchronized with the PPU NMI;
-// it runs independently at a consistent rate which is approximately 240Hz (NTSC) in 4-step mode.
-// Some games (e.g. The Legend of Zelda, Super Mario Bros.) manually synchronize it by
-// writing $C0 or $FF to $4017 once per frame.
 
 class APU {
 public:
@@ -669,8 +636,6 @@ public:
     Triangle triangle;
     Noise noise;
     DeltaModulationChannel dmc;
-
-    // TODO: Mixer
 
     //  frame counter
     uint16_t frame_counter_cycles = 0;  // Cycle counter for frame sequencer
@@ -692,11 +657,23 @@ public:
     // write to APU register
     void write_register(uint16_t address, uint8_t value);
 
+    // write APU status ($4015)
+    void write_status(uint8_t value);
+
+    // write APU frame counter ($4017)
+    void write_frame_counter(uint8_t value);
+
     // read APU status ($4015)
     uint8_t read_status();
 
     // mixed audio output
     float get_output() const;
+
+    // pulse audio output
+    float get_pulse_output() const;
+
+    // triangle-noise-dmc output
+    float get_tnd_output() const;
 
 private:
     // clock frame counter components
@@ -704,8 +681,11 @@ private:
     void clock_quarter_frame();  // envelope
     void clock_half_frame();     // length counter + sweep
 
-    // APU cycle counter for timing frame counterew
-    uint64_t cycle_count = 0;
+    // CPU cycle counter for timing frame counter
+    uint64_t cpu_cycle = 0;
+
+    // surface last write to status for per-channel access
+    uint8_t status_enable = 0;
 };
 
 } // namespace nes
