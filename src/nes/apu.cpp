@@ -346,8 +346,12 @@ namespace nes
     // relies on envelope output unless silenced for one of several reasons
     uint8_t PulseChannel::output() const
     {
-        if (!enabled || length_counter.counter == 0 || timer_period < 8
-            || !DUTY_TABLE[duty_mode][sequencer_position] || sweep.is_muting(timer_period) )
+        // there are several ways to mute
+        if (!enabled
+            || length_counter.counter == 0
+            || timer_period < 8
+            || !DUTY_TABLE[duty_mode][sequencer_position]
+            || sweep.is_muting(sweep.calculate_target_period(timer_period))) // TODO: expensive? optimize?
             return 0;
         return envelope.output();
     }
@@ -521,20 +525,41 @@ namespace nes
         return false; // case 1.2. is already fully addressed so the period was not changed
     }
 
+    // from https://www.nesdev.org/wiki/APU_Sweep#Calculating_the_target_period
+    // The sweep unit continuously calculates each pulse channel's target period
     uint16_t SweepUnit::calculate_target_period(uint16_t current_period) const
     {
-        return 1;
+        // A barrel shifter shifts the pulse channel's 11-bit raw timer period right by the shift count,
+        // producing the change amount.
+        // If the negate flag is true, the change amount is made negative, so pitch sounds higher
+        if (negate) {
+            // one's-complement quirk
+            if (is_pulse1) return current_period - (current_period >> shift) - 1;
+            // pulse 2 is merely the difference
+            else return current_period - (current_period >> shift);
+        }
+        // negate is false so change amount get added -- period gets longer, so pitch sounds lower
+        else return current_period + (current_period >> shift);
     }
 
+    // from https://www.nesdev.org/wiki/APU_Sweep#Muting
+    // Two conditions cause the sweep unit to mute the channel until the condition ends:
+    // If the current period is less than 8, the sweep unit mutes the channel. (We check this in PulseChannel.output()).
+    // If at any time the target period is greater than $7FF, the sweep unit mutes the channel.
     bool SweepUnit::is_muting(uint16_t current_period) const
     {
-        // TODO: fix naive implementation
-        return true;
+        return current_period > 0x7FF;
     }
 
     void SweepUnit::reset()
     {
-        ;
+        enabled = false;
+        period = 0;
+        negate = false;
+        shift = 0;
+        reload_flag = false;
+        divider = 0;
+        // don't reset is_pulse1
     }
 
     void Triangle::reset()
