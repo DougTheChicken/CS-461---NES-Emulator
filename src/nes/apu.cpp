@@ -478,7 +478,13 @@ namespace nes
 
     void Envelope::reset()
     {
-
+        start_flag = false;
+        decay_level = 0;
+        divider = 0;
+        // do not reset these 3, they come from channel registers
+        //  loop_flag
+        //  constant_volume_flag
+        //  volume_period
     }
 
     void LengthCounter::clock()
@@ -493,7 +499,8 @@ namespace nes
 
     void LengthCounter::reset()
     {
-        ;
+        counter = 0;
+        // do not reset halt. comes from channel registers
     }
 
     // see https://www.nesdev.org/wiki/APU_Sweep
@@ -559,7 +566,7 @@ namespace nes
         shift = 0;
         reload_flag = false;
         divider = 0;
-        // don't reset is_pulse1
+        // don't reset is_pulse1 it doesn't come from channel registers but it defines the channel itself.
     }
 
     void Triangle::reset()
