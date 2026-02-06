@@ -492,10 +492,33 @@ namespace nes
         ;
     }
 
+    // see https://www.nesdev.org/wiki/APU_Sweep
     bool SweepUnit::clock(uint16_t& timer_period)
     {
-        // TODO: fix naive implementation
-        return true;
+        if (divider != 0)
+        {
+            divider--;
+        }
+        else
+        {
+            // https://www.nesdev.org/wiki/APU_Sweep#Updating_the_period
+            // reload the divider's period as normal
+            divider = period;
+
+            if (enabled == true && shift != 0)
+            {
+                uint16_t target_period = calculate_target_period(timer_period);
+
+                // case 1.1. pulse's period is set to the target period
+                if (!is_muting(target_period))
+                {
+                    timer_period = target_period;
+                    return true;
+                }
+
+            }
+        }
+        return false; // case 1.2. is already fully addressed so the period was not changed
     }
 
     uint16_t SweepUnit::calculate_target_period(uint16_t current_period) const
