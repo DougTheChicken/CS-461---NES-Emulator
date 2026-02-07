@@ -20,7 +20,6 @@ namespace nes {
 
     // Parses the ROM file based on the iNES file format specification: https://www.nesdev.org/wiki/INES
     bool ROM::load_from_file(const char* path) {
-        // Open file
         std::ifstream f(path, std::ios::binary);
         if (!f) return false;
 
@@ -90,10 +89,13 @@ namespace nes {
         this->parsed = false;
         this->PRG_ROM_size = 0;
         this->CHR_ROM_size = 0;
-        this->nametable_arrangement = NULL;
-        this->has_battery_backed_RAM = NULL;
-        this->has_trainer = NULL;
-        this->has_alternate_nametable_layout = NULL;
+
+        // booleans: use false, not NULL
+        this->nametable_arrangement = false;
+        this->has_battery_backed_RAM = false;
+        this->has_trainer = false;
+        this->has_alternate_nametable_layout = false;
+
         this->mapper_id = 0;
         this->Trainer_data.clear();
         this->PRG_data.clear();

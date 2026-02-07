@@ -1,5 +1,6 @@
 #include "nes/console.hpp"
 #include <cstdio>
+#include <cstddef>
 
 console::console() { init(); }
 console::~console() = default;
@@ -9,8 +10,18 @@ bool console::load_rom(char* filepath) {
         std::fprintf(stderr, "[console] Failed to load ROM: %s\n", filepath);
         return false;
     }
-    std::fprintf(stderr, "[console] Loaded: %s | mapper=%u | PRG banks=%d | CHR banks=%d | PRG=%zu bytes\n",
-                 filepath, rom.mapper(), rom.prg_size_bytes() / 16384, rom.chr_size_bytes() / 8192, rom.prg_size_bytes());
+
+    const std::size_t prg_banks = rom.prg_size_bytes() / 16384;
+    const std::size_t chr_banks = rom.chr_size_bytes() / 8192;
+
+    std::fprintf(stderr,
+        "[console] Loaded: %s | mapper=%u | PRG banks=%zu | CHR banks=%zu | PRG=%zu bytes\n",
+        filepath,
+        (unsigned)rom.mapper(),
+        prg_banks,
+        chr_banks,
+        rom.prg_size_bytes()
+    );
 
     if (rom.mapper() != 0) {
         std::fprintf(stderr, "[console] WARNING: Only Mapper 0 (NROM) supported right now.\n");
@@ -22,6 +33,7 @@ bool console::load_rom(char* filepath) {
 
     uint16_t reset = static_cast<uint16_t>(mem.read(0xFFFC)) |
                      (static_cast<uint16_t>(mem.read(0xFFFD)) << 8);
+
     std::fprintf(stderr, "[console] ResetVector=$%04X  FirstOpcode=$%02X\n",
                  (unsigned)reset, (unsigned)mem.read(reset));
     return true;
@@ -29,7 +41,7 @@ bool console::load_rom(char* filepath) {
 
 void console::run_rom() {
     for (int i = 0; i < 200000; ++i) {
-        cpu.step_to(master_cycle_count + 3); // advance ~1 CPU boundary (3 PPU)
+        cpu.step_to(master_cycle_count + 3);
         master_cycle_count += 3;
 
         if ((i % 5000) == 0) {
