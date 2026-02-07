@@ -337,6 +337,9 @@ public:
     // index into sequencer table
     uint8_t sequencer_step = 0;
 
+    // $4015 bit 2 controls whether Triangle runs
+    bool enabled = false;
+
     // The sequencer is clocked by the timer as long as both the linear counter and the length counter are nonzero.
     // The sequencer sends the following looping 32-step sequence of values to the mixer:
     // 15, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  4,  3,  2,  1,  0
