@@ -547,27 +547,98 @@ namespace nes
 
     void Noise::clock_timer()
     {
-        ;
+        if (timer_counter == 0)
+        {
+            // reload from tick table
+            timer_counter = TIMER_PERIOD_IN_APU_TICKS[timer_period_index];
+            clock_shift_register();
+        }
+        else
+        {
+            // continue to count down
+            timer_counter--;
+        }
     }
 
     uint8_t Noise::output() const
     {
-        return 1;
+        // determine if channel is active or silenced
+        if ((shift_register_state & 0x01) || length_counter.counter == 0)
+        {
+            return 0;               // silenced immediately
+        }
+
+        return envelope.output();   // active
     }
 
     void Noise::write_register(uint8_t reg, uint8_t value)
     {
-        ;
+        switch (reg)
+        {
+            case 0:         // $400C    (envelope control)
+                // mask flags:
+                length_counter_halt = (value & 0x20) != 0;          // halt loop
+                constant_volume_flag = (value & 0x10) != 0;         // constant (1 = fixed, 0 = fading)
+                volume_envelope_divider_period = (value & 0x0F);    // volume
+
+                // envelope updated based on flags:
+                envelope.loop_flag = length_counter_halt;
+                envelope.constant_volume_flag = constant_volume_flag;
+                envelope.volume_period = volume_envelope_divider_period;
+
+                break;
+            
+            // $400D    (unused)
+
+            case 2:         // $400E    (frequency and mode)
+                // mask flags:
+                mode_flag = (value & 0x80) != 0;        // length of sequence (1 = short, 0 = long)
+                timer_period_index = (value & 0x0F);    // volume
+
+                // timer reload happens elsewhere (clock_timer)
+
+                break;
+            
+            case 3:         // $400F    (length and trigger)
+                // sound length
+                length_counter.load(value >> 3);    // >> 3 shifts to isolate the top 5 bits of the byte
+
+                // poke the envelope
+                envelope.start_flag = true;         // true resets internal decay
+
+                break;
+        }
     }
 
     void Noise::clock_shift_register()
     {
-        ;
-    }
+        // calculate linear feedback shift:
+        uint16_t feedback_bit = mode_flag ? 6 : 1;      // 6 = short, 1 = long
+        // compare the two bits and store in feedback (1 = different, 0 = same)
+        uint16_t feedback     = (shift_register_state & 0x01) ^
+                                ((shift_register_state >> feedback_bit) & 0x01);
+        
+        // shift right by one:
+        shift_register_state >>= 1;
 
+        // set bit 14 to calculated feedback:
+        shift_register_state |= (feedback << 14);
+    }
+    
     void Noise::reset()
     {
-        ;
+        // reset all defined noise class values back to the defaults defined in apu.hpp
+        length_counter_halt = false;
+        constant_volume_flag = false;
+        volume_envelope_divider_period = 0;
+        mode_flag = false;
+        timer_period_index = 0;
+        timer_counter = 0;
+        shift_register_state = 1;
+
+        // noise synchronisation upon reset
+        envelope.reset();
+        length_counter.reset();
     }
 
     uint8_t DeltaModulationChannel::output() const
