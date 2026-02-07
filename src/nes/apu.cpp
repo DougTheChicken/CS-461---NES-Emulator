@@ -344,10 +344,15 @@ namespace nes
 
     // See https://www.nesdev.org/wiki/APU_Pulse#Pulse_channel_output_to_mixer
     // relies on envelope output unless silenced for one of several reasons
+    // TODO: consider Blaarg Smooth Vibrato technique to eliminate "pops" on square channels
     uint8_t PulseChannel::output() const
     {
-        if (!enabled || length_counter.counter == 0 || timer_period < 8
-            || !DUTY_TABLE[duty_mode][sequencer_position] || sweep.is_muting(timer_period) )
+        // there are several ways to mute
+        if (!enabled
+            || length_counter.counter == 0
+            || timer_period < 8
+            || !DUTY_TABLE[duty_mode][sequencer_position]
+            || sweep.is_muting(sweep.calculate_target_period(timer_period))) // TODO: expensive? optimize?
             return 0;
         return envelope.output();
     }
@@ -447,6 +452,8 @@ namespace nes
 
                 // bits 7-3 length index 0..31
                 // see https://www.nesdev.org/wiki/APU_Length_Counter
+                // When the enabled bit is cleared (via $4015), the length counter is forced to 0 and cannot be changed
+                // until enabled is set again (the length counter's previous value is lost).
                 // If the enabled flag is set, the length counter is loaded with entry L of the length table
                 // LLLL L--- >> 3 -> ---L LLLL &  0x1F -> 0..31 so
                 if (enabled)
@@ -462,56 +469,154 @@ namespace nes
         }
     }
 
+    // all comments below from https://www.nesdev.org/wiki/APU_Envelope
     void Envelope::clock()
     {
-        ;
+        // if the start flag is clear,
+        // the divider is clocked
+        if (!start_flag)
+        {
+            if (divider != 0) {divider--; }
+            else // When the divider is clocked while at 0
+            {
+                // it is loaded with V
+                divider = volume_period;
+
+                // and clocks the decay level counter.
+                // Then one of two actions occurs: If the counter is non-zero, it is decremented,
+                if (decay_level != 0) {decay_level--; }
+                else
+                {
+                    // otherwise if the loop flag is set, the decay level counter is loaded with 15.
+                    // take it from the top, maestro
+                    if (loop_flag) { decay_level = 15; }
+                }
+            }
+
+        }
+        else // otherwise
+        {
+            // the start flag is cleared,
+            start_flag = false;
+
+            // the decay level counter is loaded with 15,
+            decay_level = 15;
+
+            // and the divider's period is immediately reloaded.
+            divider = volume_period;
+        }
     }
 
-    uint8_t Envelope::output() const
-    {
-        return 1;
-    }
+    // from https://www.nesdev.org/wiki/APU_Envelope
+    // The envelope unit's volume output depends on the constant volume flag:
+    // if set, the envelope parameter directly sets the volume, otherwise the decay level is the current volume.
+    // The constant volume flag has no effect besides selecting the volume source;
+    // the decay level will still be updated when constant volume is selected
+    // so all we need to return is decay_level which is already 0..15
+    uint8_t Envelope::output() const { return decay_level; }
 
     void Envelope::reset()
     {
-
+        start_flag = false;
+        decay_level = 0;
+        divider = 0;
+        // do not reset these 3, they come from channel registers
+        //  loop_flag
+        //  constant_volume_flag
+        //  volume_period
     }
 
+    // static lookup table for length counter values
+    // If the enabled flag is set, the length counter is
+    // loaded with entry L of the length table:
+    const uint8_t LengthCounter::LENGTH_TABLE[32] =
+        {10,254, 20,  2, 40,  4, 80,  6,
+        160,  8, 60, 10, 14, 12, 26, 14,
+        12, 16, 24, 18, 48, 20, 96, 22,
+        192, 24, 72, 26, 16, 28, 32, 30};
+
+    // see https://www.nesdev.org/wiki/APU_Length_Counter#Clocking
+    // The length counter provides automatic duration control for the NES APU waveform channels.
     void LengthCounter::clock()
     {
-        ;
+        //When clocked by the frame counter, the length counter is decremented except when:
+        // The length counter is 0, or
+        // The halt flag is set
+        if (counter != 0 && !halt) {  counter--; }
     }
 
-    void LengthCounter::load(uint8_t index)
-    {
-        ;
-    }
+    // see https://www.nesdev.org/wiki/APU_Length_Counter
+    // Once loaded with a value, the length counter can optionally count down
+    // Once it reaches zero, the corresponding channel is silenced.
+    void LengthCounter::load(uint8_t index) { counter = LENGTH_TABLE[index & 0x1F]; }
 
-    void LengthCounter::reset()
-    {
-        ;
-    }
+    // do not reset halt. it comes from channel registers
+    void LengthCounter::reset()  { counter = 0; }
 
+    // see https://www.nesdev.org/wiki/APU_Sweep
     bool SweepUnit::clock(uint16_t& timer_period)
     {
-        // TODO: fix naive implementation
-        return true;
+        if (divider != 0)
+        {
+            divider--;
+        }
+        else
+        {
+            // https://www.nesdev.org/wiki/APU_Sweep#Updating_the_period
+            // reload the divider's period as normal
+            divider = period;
+
+            if (enabled == true && shift != 0)
+            {
+                uint16_t target_period = calculate_target_period(timer_period);
+
+                // case 1.1. pulse's period is set to the target period
+                if (!is_muting(target_period))
+                {
+                    timer_period = target_period;
+                    return true;
+                }
+
+            }
+        }
+        return false; // case 1.2. is already fully addressed so the period was not changed
     }
 
+    // from https://www.nesdev.org/wiki/APU_Sweep#Calculating_the_target_period
+    // The sweep unit continuously calculates each pulse channel's target period
     uint16_t SweepUnit::calculate_target_period(uint16_t current_period) const
     {
-        return 1;
+        // A barrel shifter shifts the pulse channel's 11-bit raw timer period right by the shift count,
+        // producing the change amount.
+        // If the negate flag is true, the change amount is made negative, so pitch sounds higher
+        if (negate) {
+            // one's-complement quirk
+            if (is_pulse1) return current_period - (current_period >> shift) - 1;
+            // pulse 2 is merely the difference
+            else return current_period - (current_period >> shift);
+        }
+        // negate is false so change amount get added -- period gets longer, so pitch sounds lower
+        else return current_period + (current_period >> shift);
     }
 
+    // from https://www.nesdev.org/wiki/APU_Sweep#Muting
+    // Two conditions cause the sweep unit to mute the channel until the condition ends:
+    // If the current period is less than 8, the sweep unit mutes the channel. (We check this in PulseChannel.output()).
+    // If at any time the target period is greater than $7FF, the sweep unit mutes the channel.
     bool SweepUnit::is_muting(uint16_t current_period) const
     {
-        // TODO: fix naive implementation
-        return true;
+        return current_period > 0x7FF;
     }
 
+    // don't reset is_pulse1 it doesn't come from channel registers but it defines the channel itself.
     void SweepUnit::reset()
     {
-        ;
+        enabled = false;
+        period = 0;
+        negate = false;
+        shift = 0;
+        reload_flag = false;
+        divider = 0;
     }
 
     void Triangle::reset()
