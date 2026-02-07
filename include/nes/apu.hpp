@@ -129,7 +129,7 @@ public:
 
     // check if channel should be muted due to sweep
     // muting occurs if period < 8 OR target period > 0x7FF
-    bool is_muting(uint16_t current_period) const;
+    static bool is_muting(uint16_t current_period) ;
 
     // clock the sweep unit called on half-frame
     // returns true if timer period should be updated

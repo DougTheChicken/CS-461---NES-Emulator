@@ -344,7 +344,7 @@ namespace nes
 
     // See https://www.nesdev.org/wiki/APU_Pulse#Pulse_channel_output_to_mixer
     // relies on envelope output unless silenced for one of several reasons
-    // TODO: consider Blaarg Smooth Vibrato technique to eliminate "pops" on square channels
+    // TODO: optimize; also consider Blaarg Smooth Vibrato technique to eliminate "pops" on square channels
     uint8_t PulseChannel::output() const
     {
         // there are several ways to mute
@@ -352,7 +352,7 @@ namespace nes
             || length_counter.counter == 0
             || timer_period < 8
             || !DUTY_TABLE[duty_mode][sequencer_position]
-            || sweep.is_muting(sweep.calculate_target_period(timer_period))) // TODO: expensive? optimize?
+            || SweepUnit::is_muting(sweep.calculate_target_period(timer_period)))
             return 0;
         return envelope.output();
     }
@@ -462,7 +462,7 @@ namespace nes
                 // side effects - sequencer and envelope restarted, phase is reset
                 envelope.start_flag = true;
                 sequencer_position = 0;
-                timer_counter = timer_period; // TODO: test thoroughly
+                timer_counter = timer_period;
 
                 break;
             }
@@ -603,7 +603,7 @@ namespace nes
     // Two conditions cause the sweep unit to mute the channel until the condition ends:
     // If the current period is less than 8, the sweep unit mutes the channel. (We check this in PulseChannel.output()).
     // If at any time the target period is greater than $7FF, the sweep unit mutes the channel.
-    bool SweepUnit::is_muting(uint16_t current_period) const
+    bool SweepUnit::is_muting(uint16_t current_period)
     {
         return current_period > 0x7FF;
     }
@@ -619,15 +619,30 @@ namespace nes
         divider = 0;
     }
 
+    // don't reset control flag or counter_reload_value since they come from channel registers
+    // see https://www.nesdev.org/wiki/APU_Triangle
     void Triangle::reset()
     {
-        ;
+        linear_counter = 0;
+        linear_reload_flag = false;
+        timer_counter = 0;
+        sequencer_step = 0;
+        length_counter.reset();
     }
 
+    // When the frame counter generates a linear counter clock, the following actions occur in order:
     void Triangle::clock_linear_counter()
     {
-        // TODO: fix naive implementation stub
-        linear_counter--;
+        // If the linear counter reload flag is set, the linear counter is reloaded with the counter reload value,
+        if (linear_reload_flag) { linear_counter = counter_reload_value; }
+        // otherwise if the linear counter is non-zero, it is decremented.
+        else if (linear_counter != 0) { linear_counter--; }
+
+        // If the control flag is clear (aka linear counter halt flag), the linear counter reload flag is cleared.
+        if (!control_flag) { linear_reload_flag = false; }
+
+        // Note that the reload flag is not cleared unless the control flag is also clear, so when both are already
+        // set a value written to $4008 will be reloaded at the next linear counter clock.
     }
 
     void Triangle::clock_timer()
