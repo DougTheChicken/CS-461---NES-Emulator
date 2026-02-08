@@ -1,4 +1,5 @@
 #include "nes/apu.hpp"
+#include "nes/mem.hpp"
 
 namespace nes
 {
@@ -748,48 +749,202 @@ namespace nes
 
     uint8_t DeltaModulationChannel::output() const
     {
-        return 1;
+        // provide a single, 7-bit value to the mixer:
+        return output_level;
     }
 
     void DeltaModulationChannel::clock_timer()
-    {
-        ;
+    {  
+        // check if timer has run out:
+        if (timer_counter == 0) 
+        {
+            // reload if timer is done
+            timer_counter = RATE[rate_index];
+            clock_output_unit();
+        }
+        else
+        {
+            // coninue counting down if not
+            timer_counter--;
+        }
     }
 
     void DeltaModulationChannel::write_register(uint8_t reg, uint8_t value)
     {
-        ;
+        switch (reg) {
+            case 0:         // $4010    (behaviour and speed)
+                // mask flags:
+                irq_enable = (value & 0x80);    // interrupt
+                loop = (value & 0x40);          // loop (self explanitory)
+                rate_index = (value & 0x0F);    // pitch
+
+                // irq cleanup
+                if (!irq_enable)
+                {
+                    irq_pending = false;        // clears pending upon disable
+                }
+
+                break;
+
+            case 1:         // $4011    (direct load)
+                // mask flag:
+                output_level = (value & 0x7F);  // bypass "delta" logic
+
+                break;
+
+            case 2:         // $4012    (sample address)
+                // point to memory location of audio data:
+                sample_address = value;         // math done elsewhere
+
+                break;
+
+            case 3:         // $4013    (sample length)
+                // determine how many bytes are read before end (or loop):
+                sample_length = value;         // math done elsewhere
+
+                break;
+        }
     }
 
     void DeltaModulationChannel::attach_memory(Memory* m)
     {
-        ;
+        // plug in memory:
+        memory = m;
     }
 
     void DeltaModulationChannel::clock_memory_unit()
     {
-        ;
+        // check if buffer already has a byte anb if current sample is finished:
+        if (!sample_buffer_full && bytes_remaining > 0)
+        {
+            // fetch new byte:
+            fetch_sample_byte();
+        }
     }
 
     void DeltaModulationChannel::clock_output_unit()
     {
-        ;
+        // check if current byte is done:
+        if (bits_remaining == 0)
+        {
+            // set counter for next byte:
+            bits_remaining = 8;
+
+            // check if buffer is empty:
+            if (!sample_buffer_full)
+            {
+                silence = true;                 // wait for next sample
+            }
+            else
+            {
+                silence = false;                // play sample
+                shift_reg = sample_buffer;      // move byte into register
+                sample_buffer_full  = false;    // mark that sample is playing
+            }
+        }
+
+        // check if able to play sample:
+        if (!silence)
+        {
+            // check bit 0 (1 = +2, 0 = -2)
+            if (shift_reg & 0x01)
+            {
+                // check if within edge:
+                if (output_level <= 125)
+                {
+                    output_level += 2;
+                }
+            }
+            else
+            {
+                // check if within edge:
+                if (output_level >= 2)
+                {
+                    output_level -= 2;
+                }
+            }
+
+            // move to next bit:
+            shift_reg >>= 1;
+        }
+
+        // count down bit "timer":
+        bits_remaining--;
     }
 
     bool DeltaModulationChannel::fetch_sample_byte()
     {
-        // TODO: fix naive implementation
+        if (memory == nullptr)
+        {
+            return false;
+        }
+
+        // data fetch:
+        sample_buffer = memory->read(current_address);  // grabs next byte to read and store it
+        sample_buffer_full = true;                      // indicates that a byte is waiting
+
+        // handle wrap-around:
+        current_address++;              // increment bit
+        if (current_address == 0)       // checks if address wrapped back to $0000
+        {
+            current_address = 0x8000;   // resets position to $8000
+        }
+
+        // 
+        bytes_remaining--;              // counts down bit "timer"
+        if (bytes_remaining == 0)       // checks if counter is done
+        {
+            // if loop is on:
+            if (loop) 
+            {
+                // restart byte:
+                current_address = 0xC000 | (uint16_t(sample_address) << 6);
+                bytes_remaining = (uint16_t(sample_length) << 4) + 1;
+            }
+            // if loop is off and if the CPU asks for interrupt:
+            else if (irq_enable)
+            {
+                irq_pending = true;     // let CPU jump in
+            }
+        }
+
+        // take control of the data bus for 4 cycles
+        pending_stall_cycles = 4;
+
         return true;
     }
 
     void DeltaModulationChannel::play_sample()
     {
-        ;
+        // check if channel is busy:
+        if (bytes_remaining == 0)
+        {
+            // start loaded byte:
+            current_address = 0xC000 | (uint16_t(sample_address) << 6);
+            bytes_remaining = (uint16_t(sample_length) << 4) + 1;
+        }
     }
 
     void DeltaModulationChannel::reset()
     {
-        ;
+        // reset dmc class values back to the defaults defined in apu.hpp (1 exeption):
+        irq_enable = false;
+        irq_pending = false;
+        enabled = false;
+        loop = false;
+        sample_buffer_full = false;
+        silence = true;     // silence channel until CPU provides sample
+        rate_index = 0;
+        output_level = 0;
+        sample_address = 0;
+        sample_length = 0;
+        sample_buffer = 0;
+        current_address = 0;
+        bytes_remaining = 0;
+        timer_counter = 0;
+        shift_reg = 0;
+        bits_remaining = 0;
+        pending_stall_cycles = 0;
     }
 }
 
