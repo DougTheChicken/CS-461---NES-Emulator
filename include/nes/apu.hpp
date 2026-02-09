@@ -129,7 +129,7 @@ public:
 
     // check if channel should be muted due to sweep
     // muting occurs if period < 8 OR target period > 0x7FF
-    bool is_muting(uint16_t current_period) const;
+    static bool is_muting(uint16_t current_period) ;
 
     // clock the sweep unit called on half-frame
     // returns true if timer period should be updated
@@ -336,6 +336,9 @@ public:
 
     // index into sequencer table
     uint8_t sequencer_step = 0;
+
+    // $4015 bit 2 controls whether Triangle runs
+    bool enabled = false;
 
     // The sequencer is clocked by the timer as long as both the linear counter and the length counter are nonzero.
     // The sequencer sends the following looping 32-step sequence of values to the mixer:

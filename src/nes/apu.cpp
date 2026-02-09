@@ -158,16 +158,30 @@ namespace nes
     // 4-bits: ---D NT21 	Enable DMC (D), noise (N), triangle (T), and pulse channels (2/1)
     void APU::write_status(uint8_t value)
     {
-        status_enable = value & 0x1F; // mask to keep lower 4 bits
+        status_enable = value & 0x1F; // mask to keep lower 5 bits
 
         // clear length counter to silence NT21
-        if ((status_enable & 0x01) == 0) pulse1.length_counter.clear();
-        if ((status_enable & 0x02) == 0) pulse2.length_counter.clear();
-        if ((status_enable & 0x04) == 0) triangle.length_counter.clear();
-        if ((status_enable & 0x08) == 0) noise.length_counter.clear();
+        // Pulse 1
+        pulse1.enabled = (status_enable & 0x01) != 0;
+        if (!pulse1.enabled)
+            pulse1.length_counter.clear();
 
-        // dmc silence uses a flag to enable/disable
-        if ((status_enable & 0x10) == 0) dmc.enabled = false;
+        // Pulse 2
+        pulse2.enabled = (status_enable & 0x02) != 0;
+        if (!pulse2.enabled)
+            pulse2.length_counter.clear();
+
+        // Triangle
+        triangle.enabled = (status_enable & 0x04) != 0;
+        if (!triangle.enabled)
+            triangle.length_counter.clear();
+
+        // Noise (no enabled flag)
+        if ((status_enable & 0x08) == 0)
+            noise.length_counter.clear();
+
+        // DMC (must be symmetric: enable AND disable)
+        dmc.enabled = (status_enable & 0x10) != 0;
 
         // "Writing to this register clears the DMC interrupt flag."
         dmc.irq_pending = false;
@@ -344,7 +358,7 @@ namespace nes
 
     // See https://www.nesdev.org/wiki/APU_Pulse#Pulse_channel_output_to_mixer
     // relies on envelope output unless silenced for one of several reasons
-    // TODO: consider Blaarg Smooth Vibrato technique to eliminate "pops" on square channels
+    // TODO: optimize; also consider Blaarg Smooth Vibrato technique to eliminate "pops" on square channels
     uint8_t PulseChannel::output() const
     {
         // there are several ways to mute
@@ -352,7 +366,7 @@ namespace nes
             || length_counter.counter == 0
             || timer_period < 8
             || !DUTY_TABLE[duty_mode][sequencer_position]
-            || sweep.is_muting(sweep.calculate_target_period(timer_period))) // TODO: expensive? optimize?
+            || SweepUnit::is_muting(sweep.calculate_target_period(timer_period)))
             return 0;
         return envelope.output();
     }
@@ -454,15 +468,13 @@ namespace nes
                 // see https://www.nesdev.org/wiki/APU_Length_Counter
                 // When the enabled bit is cleared (via $4015), the length counter is forced to 0 and cannot be changed
                 // until enabled is set again (the length counter's previous value is lost).
-                // If the enabled flag is set, the length counter is loaded with entry L of the length table
                 // LLLL L--- >> 3 -> ---L LLLL &  0x1F -> 0..31 so
-                if (enabled)
-                    length_counter.load((value >> 3) & 0x1F);
+                length_counter.load((value >> 3) & 0x1F);
 
                 // side effects - sequencer and envelope restarted, phase is reset
                 envelope.start_flag = true;
                 sequencer_position = 0;
-                timer_counter = timer_period; // TODO: test thoroughly
+                timer_counter = timer_period;
 
                 break;
             }
@@ -603,7 +615,7 @@ namespace nes
     // Two conditions cause the sweep unit to mute the channel until the condition ends:
     // If the current period is less than 8, the sweep unit mutes the channel. (We check this in PulseChannel.output()).
     // If at any time the target period is greater than $7FF, the sweep unit mutes the channel.
-    bool SweepUnit::is_muting(uint16_t current_period) const
+    bool SweepUnit::is_muting(uint16_t current_period)
     {
         return current_period > 0x7FF;
     }
@@ -619,30 +631,137 @@ namespace nes
         divider = 0;
     }
 
+    // The sequencer sends the following looping 32-step sequence of values to the mixer:
+    const uint8_t Triangle::SEQUENCER_TABLE[32] = {
+        15, 14, 13, 12, 11, 10, 9, 8,
+        7, 6, 5, 4, 3, 2, 1, 0,
+        1, 2, 3, 4, 5, 6, 7,8,
+        10, 11, 12, 13, 14, 15 };
+
+
+    // see https://www.nesdev.org/wiki/APU_Triangle
     void Triangle::reset()
     {
-        ;
+        linear_counter = 0;
+        linear_reload_flag = false;
+        timer_counter = 0;
+        sequencer_step = 0;
+        control_flag = false;
+        counter_reload_value = 0;
+        timer_period = 0;
+        enabled = false;
+        length_counter.reset();
     }
 
+    // When the frame counter generates a linear counter clock, the following actions occur in order:
     void Triangle::clock_linear_counter()
     {
-        // TODO: fix naive implementation stub
-        linear_counter--;
+        // If the linear counter reload flag is set, the linear counter is reloaded with the counter reload value,
+        if (linear_reload_flag) { linear_counter = counter_reload_value; }
+        // otherwise if the linear counter is non-zero, it is decremented.
+        else if (linear_counter != 0) { linear_counter--; }
+
+        // If the control flag is clear (aka linear counter halt flag), the linear counter reload flag is cleared.
+        if (!control_flag) { linear_reload_flag = false; }
+
+        // Note that the reload flag is not cleared unless the control flag is also clear, so when both are already
+        // set a value written to $4008 will be reloaded at the next linear counter clock.
     }
 
+    // see https://www.nesdev.org/wiki/APU_Triangle
     void Triangle::clock_timer()
     {
-        ;
+        // keep counting down until 0
+        if (timer_counter != 0) { timer_counter--; }
+        else
+        {
+            // reload the counter
+            timer_counter = timer_period;
+
+            // if not silenced, step the sequencer in a clamped 0..31 way
+            // this is interesting because when you un-silence Triangle,
+            // it just picks up where you last heard a note. Silence is more
+            // like Pause.
+            if (linear_counter > 0 && length_counter.counter > 0)
+                sequencer_step = (sequencer_step + 1) & 0x1F;
+        }
     }
 
+    // when not silenced, Triangle outputs whatever 0..15 value is currently indexed
+    // by sequencer_step
     uint8_t Triangle::output() const
     {
-        return 1;
+        if (!enabled || length_counter.counter == 0 || linear_counter == 0)
+            return 0;
+
+        return SEQUENCER_TABLE[sequencer_step];
     }
 
     void Triangle::write_register(uint8_t reg, uint8_t value)
     {
-        ;
+        // $4008 - $400B, but $4009 is unused
+        // so normalizes reg to 0..3
+        switch (reg & 0x03)
+        {
+        // $4008
+        case 0:
+            {
+                // bit 7 control flag aka length counter halt flag 0..3
+                // shift and isolate the 2 bits into duty_mode 0..3 values
+                control_flag = (value >> 7) & 0x01;
+
+                // bits 6-0 	-RRR RRRR 	Counter reload value
+                counter_reload_value = (value & 0x7F);
+
+                // side effects duty cycle is changed but sequencer position unchanged
+                break;
+            }
+
+            // $4009
+        case 1:
+            {
+                // no-op
+                break;
+            }
+
+            // $400A
+        case 2:
+            {
+                // just like PulseChannel
+                // timer low 8 bits
+                // clear
+                timer_period &= 0x0700;
+
+                // set
+                timer_period |= value;
+
+                break;
+            }
+            // $400B
+        case 3:
+            {
+                // just like PuleChannel
+
+                // bits 2-0 timer high 3 bits
+                // clear high bits
+                timer_period &= 0x00FF;
+
+                // set high 3 bits
+                timer_period |= (value & 0x07) << 8;
+
+                // bits 7-3 length index 0..31
+                // see https://www.nesdev.org/wiki/APU_Length_Counter
+                // When the enabled bit is cleared (via $4015), the length counter is forced to 0 and cannot be changed
+                // until enabled is set again (the length counter's previous value is lost).
+                // LLLL L--- >> 3 -> ---L LLLL &  0x1F -> 0..31 so
+                length_counter.load((value >> 3) & 0x1F);
+
+                // Side effects 	Sets the linear counter reload flag
+                linear_reload_flag = true;
+
+                break;
+            }
+        }
     }
 
     void Noise::clock_envelope()
