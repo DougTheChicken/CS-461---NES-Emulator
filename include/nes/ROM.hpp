@@ -4,6 +4,8 @@
 #include <vector>
 #include <string>
 
+// TODO: Make the iNES ROM spec a struct and parse it in a more structured way.
+
 namespace nes {
     class ROM {
     public:
