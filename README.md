@@ -1,14 +1,32 @@
-# CS-461---NES-Emulator
-Capstone - Build an NES Emulator and Run NES ROMs
+# CS-461 NES Emulator
+A cross-platform NES emulator built as part of the OSU CS-461/462 Capstone project.
 
-Proves our toolchain, repo health, and collaboration for Progress Report #1.
+
+## Current Status
+The project is under active development. Core system scaffolding is in place, with CPU, memory, and ROM loading under implementation. Rendering and input are handled through SDL2.
+
+## Repository Structure
+```text
+src/nes/        Core emulator components (CPU, PPU, memory)
+tests/          Test harness and validation ROMs
+.github/        CI workflows
+build/          Out-of-source build artifacts
+
+
+## High-Level Architecture
+- **CPU** – 6502 instruction execution and registers
+- **Memory** – NES memory map and mirroring
+- **PPU** – Graphics pipeline and framebuffer
+- **ROM Loader** – iNES parsing and PRG/CHR mapping
+- **Input** – NES controller state via SDL events
+
 
 ## Tech
 - **Language:** C++20
 - **Build:** CMake (+ Makefile shim)
 - **Window/Input/Rendering:** SDL2
 - **CI:** GitHub Actions (Linux/macOS/Windows)
-- **Tests:** simple placeholder test binary
+- **Tests:** basic test harness for build validation (functional tests in progress)
 
 ## Quick Start
 
@@ -50,12 +68,18 @@ cmake --build build --config Release
 ./build/tests/Release/tests.exe
 ```
 
-## Workflow
-- Feature branches: `feature/<short-desc>`
-- PRs required; 1 reviewer; CI must pass
-- Keep PRs small; link Issues
+## Running ROMs
+ROM loading is under active development. At this stage, the emulator validates the toolchain and core system scaffolding but does not yet fully execute commercial NES ROMs.
 
-## Next
+
+## Contributing
+- Feature branches: `feature/<short-desc>`
+- Pull requests required (1 reviewer minimum)
+- CI must pass before merging
+- Keep PRs small and link related issues
+
+
+## Upcoming Work
 - 6502 opcode table + `CPU.step()`
 - NES palette + PPU framebuffer
 - iNES ROM loader
