@@ -10,23 +10,18 @@ namespace nes {
     static constexpr std::size_t PRG_BANK_SIZE      = 16 * 1024;
     static constexpr std::size_t CHR_BANK_SIZE      = 8 * 1024;
 
-    // Helper function to read an exact number of bytes from the file stream, returning false if the read fails
-    // Used to simplify error handling when reading the ROM file (cleaner happy path code)
-    // TODO: validate file length before reading (defensive against truncated ROMs)
-    auto read_exact = [&](void* dst, std::size_t size) {
-        f.read(static_cast<char*>(dst), size);
-        return static_cast<bool>(f);
-    };
-
     // Parses the ROM file based on the iNES file format specification: https://www.nesdev.org/wiki/INES
     bool ROM::load_from_file(const char* path) {
         std::ifstream f(path, std::ios::binary);
         if (!f) return false;
 
-        // Open file
-        std::ifstream file(path, std::ios::binary);
-        if (!file) return false;
-    
+        // Helper function to read an exact number of bytes from the file stream, returning false if the read fails
+        // Used to simplify error handling when reading the ROM file (cleaner happy path code)
+        // TODO: validate file length before reading (defensive against truncated ROMs)
+        auto read_exact = [&](void* dst, std::size_t size) {
+            f.read(static_cast<char*>(dst), size);
+            return static_cast<bool>(f);
+        };
 
         // Read header
         std::array<uint8_t, HEADER_SIZE> header{};
