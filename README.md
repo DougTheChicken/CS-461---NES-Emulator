@@ -6,10 +6,12 @@ A cross-platform NES emulator built as part of the OSU CS-461/462 Capstone proje
 The project is under active development. Core system scaffolding is in place, with CPU, memory, and ROM loading under implementation. Rendering and input are handled through SDL2.
 
 ## Repository Structure
+```text
 src/nes/        Core emulator components (CPU, PPU, memory)
 tests/          Test harness and validation ROMs
 .github/        CI workflows
 build/          Out-of-source build artifacts
+```
 
 ## High-Level Architecture
 - **CPU** – 6502 instruction execution and registers
