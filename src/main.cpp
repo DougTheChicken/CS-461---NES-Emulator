@@ -1,19 +1,43 @@
 #include "nes/console.hpp"
+#include "ui/ui.hpp"
 #include <cstdio>
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
-        std::fprintf(stderr, "Usage: %s <romfile>\n", argv[0]);
+    // Initialize UI
+    if (!ui::init()) {
+        std::fprintf(stderr, "Failed to initialize UI\n");
         return 1;
     }
 
-    console c;
+    // Create emulator instance
+    console emu;
+    bool is_running = false;
 
-    if (!c.load_rom(argv[1])) {
-        std::fprintf(stderr, "Failed to load ROM\n");
-        return 1;
+    // If ROM provided via CLI, load it immediately
+    if (argc >= 2) {
+        if (emu.load_rom(argv[1])) {
+            std::fprintf(stderr, "Loaded ROM from CLI: %s\n", argv[1]);
+            is_running = true;
+        } else {
+            std::fprintf(stderr, "Failed to load ROM: %s\n", argv[1]);
+        }
     }
 
-    c.run_rom();
+    // Main loop
+    std::fprintf(stderr, "Entering UI loop (press ESC to exit, SPACE to pause/run)\n");
+    
+    while (ui::step(emu, is_running)) {
+        // If emulator is running, step forward
+        // NES runs at ~1.79 MHz, so we step by a small amount per frame
+        // At 60 FPS, that's ~29830 cycles per frame
+        if (is_running) {
+            emu.step(29830);
+        }
+    }
+
+    // Cleanup
+    ui::shutdown();
+    std::fprintf(stderr, "Exiting\n");
+    
     return 0;
 }
