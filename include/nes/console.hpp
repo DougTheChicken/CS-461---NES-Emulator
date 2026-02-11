@@ -17,10 +17,17 @@ public:
     void init();
 
     void reset_all();
+    
+    // UI/Framebuffer interface
+    const uint32_t* framebuffer() const { return framebuffer_data; }
 
 private:
     nes::ROM  rom;
     nes::Memory    mem;
     unsigned long long master_cycle_count = 0;
     nes::CPU  cpu;
+    
+    // Framebuffer for rendering (256x240 ARGB)
+    uint32_t framebuffer_data[256 * 240];
+    void update_framebuffer();
 };
