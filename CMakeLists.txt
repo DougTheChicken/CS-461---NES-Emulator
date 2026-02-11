@@ -52,9 +52,10 @@ if(APPLE)
     endif()
 endif()
 
-# ---- Library: all sources under src/, EXCEPT main.cpp ----
+# ---- Library: all sources under src/, EXCEPT main.cpp and ui/ ----
 file(GLOB_RECURSE NES_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*.cpp")
 list(FILTER NES_SOURCES EXCLUDE REGEX ".*/main\\.cpp$")
+list(FILTER NES_SOURCES EXCLUDE REGEX ".*/ui/.*\\.cpp$")
 
 add_library(nes_lib ${NES_SOURCES})
 target_include_directories(nes_lib
@@ -63,7 +64,18 @@ target_include_directories(nes_lib
         $<INSTALL_INTERFACE:include>
 )
 
-# ---- Executable with main.cpp; link SDL only here ----
+# ---- UI Library ----
+add_library(nes_ui STATIC
+    ${PROJECT_SOURCE_DIR}/src/ui/ui.cpp
+)
+target_include_directories(nes_ui
+    PUBLIC
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(nes_ui PUBLIC SDL2::SDL2 imgui OpenGL::GL)
+
+# ---- Executable with main.cpp; link SDL, and UI ----
 add_executable(nes_emu ${PROJECT_SOURCE_DIR}/src/main.cpp
         include/nes/ppu.hpp
         include/nes/component.hpp
@@ -72,7 +84,7 @@ add_executable(nes_emu ${PROJECT_SOURCE_DIR}/src/main.cpp
         src/nes/ROM.cpp
         src/nes/apu.cpp
 )
-target_link_libraries(nes_emu PRIVATE nes_lib SDL2::SDL2)
+target_link_libraries(nes_emu PRIVATE nes_lib nes_ui SDL2::SDL2)
 
 if (WIN32)
     # Many SDL2 configs want SDL2main on Windows
