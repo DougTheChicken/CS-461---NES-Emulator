@@ -82,5 +82,4 @@ ROM loading is under active development. At this stage, the emulator validates t
 ## Upcoming Work
 - 6502 opcode table + `CPU.step()`
 - NES palette + PPU framebuffer
-- iNES ROM loader
-- Controller input mapping
+- Basic User Interface
