@@ -98,6 +98,11 @@ namespace nes {
         uint8_t palette_ram[32] = {}; // $3F00-$3F1F (with mirrors)
         uint8_t oam[256] = {}; // Primary OAM (64 sprites * 4 bytes)
 
+        // from https://www.nesdev.org/wiki/PPU_rendering?utm_source=chatgpt.com#Line-by-line_timing
+        // line-by-line timing
+        bool odd_frame = false; // For odd frames, the cycle at the end of the scanline is skipped
+        uint16_t scanline = -1; // -1 prerender, 0-239 render, 240 post-render; 241-260 vblank
+        uint16_t cycle = 0; // 0 - 340 (https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png)
 
     private:
 
