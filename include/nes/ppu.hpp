@@ -53,7 +53,7 @@ namespace nes {
         uint8_t oam_address = 0;  // address for OAM read/write
 
         // $2004 values  OAMDATA - Sprite RAM data  ($2004 read/write)
-        uint8_t oam_data = 0; // address for OAM buffer read/write
+        uint8_t oam_data = 0; // data port for OAM buffer read/write
 
         // $2005 values PPUSCROLL - X and Y scroll ($2005 write)
         // from https://www.nesdev.org/wiki/PPU_registers#PPUSCROLL_-_X_and_Y_scroll_($2005_write)
@@ -71,20 +71,21 @@ namespace nes {
         // The PPU scroll registers share internal state with the PPU address registers. Because of this,
         // PPUSCROLL and the nametable bits in PPUCTRL should be written **__AFTER__*** any writes to PPUADDR.
         // ********
-        uint8_t x_y_scroll = 0; // fine scroll 0-7; x if first write aka internal register x: The
-        // fine-x position of the current scroll, used during rendering alongside v.
 
-        bool write_toggle = false; // shared write toogle for $2005/$2006; false = first write aka internal reigister
-        // w: w: Toggles on each write to either PPUSCROLL or PPUADDR, indicating whether this is the first or second
+        // Internal registers (scroll/address latches)
+        uint16_t v = 0; // Current VRAM address (15 bits). During rendering, used for the scroll position.
+
+        // internal register t: Temporary VRAM address (15 bits)
+        uint16_t t = 0;
+
+         // fine-x position of the current scroll, used during rendering alongside v.
+        uint8_t x = 0;
+
+        // toggles on each write to either PPUSCROLL or PPUADDR, indicating whether this is the first or second
         // write. Clears on reads of PPUSTATUS. Sometimes called the 'write latch' or 'write toggle'.
+        bool w = false;
 
         // $2006 values PPUADDR - VRAM address ($2006 write)
-        uint16_t vram_address = 0; // Current VRAM address (15 bits)
-        // aka internal register v: During rendering, used for the scroll position. Outside of rendering,
-        // used as the current VRAM address.
-
-        uint16_t temp_vram_address = 0; // internal register t: Temporary VRAM address (15 bits)
-
         // $2007 values PPUDATA - VRAM data ($2007 read/write)
         uint8_t data_buffer = 0; // Internal read buffer for buffered VRAM reads. pallette reads are unbuffered and
         // still update the buffere with the mirrored nametable byte.
