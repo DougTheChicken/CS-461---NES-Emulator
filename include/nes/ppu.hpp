@@ -71,7 +71,7 @@ namespace nes {
         // The PPU scroll registers share internal state with the PPU address registers. Because of this,
         // PPUSCROLL and the nametable bits in PPUCTRL should be written **__AFTER__*** any writes to PPUADDR.
         // ********
-        uint8_t x_y_scroll = 0; // fine scroll 0-7; x if first write, y if 2nd write, aka internal register x: The
+        uint8_t x_y_scroll = 0; // fine scroll 0-7; x if first write aka internal register x: The
         // fine-x position of the current scroll, used during rendering alongside v.
 
         bool write_toggle = false; // shared write toogle for $2005/$2006; false = first write aka internal reigister
@@ -91,6 +91,11 @@ namespace nes {
 
         // $4014 values OAMDMA - Sprite DMA ($4014 write)
         uint8_t oam_dma_page = 0; // High byte of CPU address for OAM DMA ($XX00–$XXFF)
+
+        // PPU internal memory
+        uint8_t nametable_ram[2048] = {}; // CIRAM $2000-$2FFF (mirroring handled by mapper/bus)
+        uint8_t palette_ram[32] = {}; // $3F00-$3F1F (with mirrors)
+        uint8_t oam[256] = {}; // Primary OAM (64 sprites * 4 bytes)
 
 
     private:
