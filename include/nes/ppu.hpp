@@ -6,6 +6,8 @@ namespace nes {
         void reset() {}
         void step() {}
 
+        // All register fields from https://www.nesdev.org/wiki/PPU_registers
+
         // $2000 values
         uint8_t base_nametable_select = 0; // nametable x and y
         bool vram_address_increment_flag = false; //  (0: add 1, going across; 1: add 32, going down)
@@ -53,7 +55,8 @@ namespace nes {
         uint8_t oam_address = 0;  // address for OAM read/write
 
         // $2004 values  OAMDATA - Sprite RAM data  ($2004 read/write)
-        uint8_t oam_data = 0; // data port for OAM buffer read/write
+        // implemented via oam[am_address] calls. comment left for completeness.
+
 
         // $2005 values PPUSCROLL - X and Y scroll ($2005 write)
         // from https://www.nesdev.org/wiki/PPU_registers#PPUSCROLL_-_X_and_Y_scroll_($2005_write)
@@ -87,8 +90,9 @@ namespace nes {
 
         // $2006 values PPUADDR - VRAM address ($2006 write)
         // $2007 values PPUDATA - VRAM data ($2007 read/write)
-        uint8_t data_buffer = 0; // Internal read buffer for buffered VRAM reads. pallette reads are unbuffered and
+        // Internal read buffer for buffered VRAM reads. pallette reads are unbuffered and
         // still update the buffere with the mirrored nametable byte.
+        uint8_t data_buffer = 0;
 
         // $4014 values OAMDMA - Sprite DMA ($4014 write)
         uint8_t oam_dma_page = 0; // High byte of CPU address for OAM DMA ($XX00–$XXFF)
@@ -101,14 +105,31 @@ namespace nes {
         // from https://www.nesdev.org/wiki/PPU_rendering?utm_source=chatgpt.com#Line-by-line_timing
         // line-by-line timing
         bool odd_frame = false; // For odd frames, the cycle at the end of the scanline is skipped
-        uint16_t scanline = -1; // -1 prerender, 0-239 render, 240 post-render; 241-260 vblank
+        int16_t scanline = -1; // -1 prerender, 0-239 render, 240 post-render; 241-260 vblank
         uint16_t cycle = 0; // 0 - 340 (https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png)
 
         // from https://www.nesdev.org/wiki/PPU_registers#Summary
-        uint8_t read_register(uint16_t address);   // CPU reads $2000-$2007
-        void write_register(uint16_t address, uint8_t value);  // CPU writes $2000-$2007
-        void write_oamdma(const uint8_t* page_data);  // CPU writes $4014
-    private:
+        // CPU interface for $2000 - $2007
+        uint8_t cpu_read_register(uint16_t address);   // CPU reads $2000-$2007
+        void cpu_write_register(uint16_t address, uint8_t value);  // CPU writes $2000-$2007
 
+        // PPU addressable space $0000 - $3FFF
+        uint8_t ppu_read(uint16_t address);
+        void ppu_write(uint16_t address, uint8_t value);
+
+        void write_oamdma(const uint8_t* page_data);  // CPU writes $4014
+
+
+    private:
+        // internal PPU bus routing with no CPU side effects
+        uint8_t ppu_bus_read(uint16_t address);
+        void ppu_bus_write(uint16_t address, uint8_t value);
+
+        // $2007 helper methods
+        uint8_t cpu_read_ppudata();
+        void cpu_write_ppudata(uint8_t value); // cpu just provides 8-bit data value in $2007
+
+        // tricky, so we only implement v increment logic once
+        void increment_v();
     };
 }
