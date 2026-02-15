@@ -104,6 +104,10 @@ namespace nes {
         uint16_t scanline = -1; // -1 prerender, 0-239 render, 240 post-render; 241-260 vblank
         uint16_t cycle = 0; // 0 - 340 (https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png)
 
+        // from https://www.nesdev.org/wiki/PPU_registers#Summary
+        uint8_t read_register(uint16_t address);   // CPU reads $2000-$2007
+        void write_register(uint16_t address, uint8_t value);  // CPU writes $2000-$2007
+        void write_oamdma(const uint8_t* page_data);  // CPU writes $4014
     private:
 
     };
