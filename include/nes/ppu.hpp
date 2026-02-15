@@ -117,10 +117,13 @@ namespace nes {
         void cpu_write_register(uint16_t address, uint8_t value);  // CPU writes $2000-$2007
 
         // PPU addressable space $0000 - $3FFF
-        uint8_t ppu_read(uint16_t address);
-        void ppu_write(uint16_t address, uint8_t value);
+        // TODO: determine if these wrappers are necessary. default to private bus read/write for now.
+        // uint8_t ppu_read(uint16_t address);
+        // void ppu_write(uint16_t address, uint8_t value);
 
-        void write_oamdma(const uint8_t* page_data);  // CPU writes $4014
+        // CPU interface for $4014
+        void cpu_write_oamdma(uint8_t page);
+        void oamdma_execute(uint8_t* page_data); // CPU/bus operation so PPU can get data
 
         void reset();
         void step();
@@ -130,11 +133,29 @@ namespace nes {
         uint8_t ppu_bus_read(uint16_t address);
         void ppu_bus_write(uint16_t address, uint8_t value);
 
+        // on oamdma_execute, internal PPU write into oam[(oam_address + i) & 0xFF] and
+        // increment oam_address
+        void oamdma_copy_256(const uint8_t* page_data);
+
         // $2007 helper methods
         uint8_t cpu_read_ppudata();
         void cpu_write_ppudata(uint8_t value); // cpu just provides 8-bit data value in $2007
 
         // tricky, so we only implement v increment logic once
         void increment_v();
+
+        // Memory address mirroring helpers
+        // https://www.nesdev.org/wiki/Mirroring#Nametable_Mirroring
+        uint16_t mirror_nametable_address(uint16_t address);
+
+        // returns canonical address in $3F00-$3F1F after folding in address
+        // and applying the sprint to background mirror quirk
+        // from https://www.nesdev.org/wiki/PPU_palettes
+        // Addresses  $3F10, $3F14, $3F18, and $3F1C are
+        // mirrors of $3F00, $3F04, $3F08, and $3F0C respectively.
+        // The sprite palette entries at these addresses are unused because
+        // color 0 of each sprite palette is transparent, so these addresses
+        // instead access the background palette.
+        uint16_t mirror_palette_address(uint16_t address);
     };
 }
