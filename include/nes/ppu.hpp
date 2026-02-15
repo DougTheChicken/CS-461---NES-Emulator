@@ -3,8 +3,7 @@
 namespace nes {
     class PPU {
     public:
-        void reset() {}
-        void step() {}
+
 
         // All register fields from https://www.nesdev.org/wiki/PPU_registers
 
@@ -15,7 +14,7 @@ namespace nes {
         bool background_pattern_table_address_flag = false; // $0000 when clear, $1000 when set
         bool sprite_size_flag = false;  // 8x16 when set
         bool ppu_master_slave_flag = false; //(0: read backdrop from EXT pins; 1: output color on EXT pins)
-        bool vblank_nmi_flag = false; // (0: off, 1: on)
+        bool vblank_nmi_flag = false; // (0: off, 1: on) NMI enable on vblank
 
         // $2001 values
         bool greyscale_flag = false; // (0: normal color, 1: greyscale)
@@ -55,7 +54,7 @@ namespace nes {
         uint8_t oam_address = 0;  // address for OAM read/write
 
         // $2004 values  OAMDATA - Sprite RAM data  ($2004 read/write)
-        // implemented via oam[am_address] calls. comment left for completeness.
+        // implemented via oam[oam_address] calls. comment left for completeness.
 
 
         // $2005 values PPUSCROLL - X and Y scroll ($2005 write)
@@ -108,6 +107,10 @@ namespace nes {
         int16_t scanline = -1; // -1 prerender, 0-239 render, 240 post-render; 241-260 vblank
         uint16_t cycle = 0; // 0 - 340 (https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png)
 
+        // Non-Maskable Interrupt management
+        bool nmi_pending = false;  // signal to CPU: take NMI
+        bool nmi_prev = false;     // edge detect previous (vblank_flag && vblank_nmi_flag)
+
         // from https://www.nesdev.org/wiki/PPU_registers#Summary
         // CPU interface for $2000 - $2007
         uint8_t cpu_read_register(uint16_t address);   // CPU reads $2000-$2007
@@ -119,6 +122,8 @@ namespace nes {
 
         void write_oamdma(const uint8_t* page_data);  // CPU writes $4014
 
+        void reset();
+        void step();
 
     private:
         // internal PPU bus routing with no CPU side effects
