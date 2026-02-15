@@ -1,8 +1,12 @@
 #include "nes/console.hpp"
 #include <cstdio>
 #include <cstddef>
+#include <cstring>
 
-console::console() { init(); }
+console::console() { 
+    std::memset(framebuffer_data, 0, sizeof(framebuffer_data));
+    init(); 
+}
 console::~console() = default;
 
 bool console::load_rom(char* filepath) {
@@ -61,8 +65,31 @@ void console::run_rom() {
 void console::step(cycle_t stepcount) {
     cpu.step_to(master_cycle_count + stepcount);
     master_cycle_count += stepcount;
+    update_framebuffer();
 }
 
 void console::init() {
     master_cycle_count = 0;
+}
+
+void console::reset_all() {
+    master_cycle_count = 0;
+    cpu.reset();
+    rom.reset();
+    mem.reset();
+    std::fprintf(stderr, "[console] Reset complete\n");
+}
+
+void console::update_framebuffer() {
+    // Placeholder: generate a simple test pattern
+    // This will be replaced when PPU is fully implemented
+    for (int y = 0; y < 240; ++y) {
+        for (int x = 0; x < 256; ++x) {
+            // Create a simple pattern based on CPU state
+            uint8_t r = static_cast<uint8_t>((x + cpu.a()) & 0xFF);
+            uint8_t g = static_cast<uint8_t>((y + cpu.x()) & 0xFF);
+            uint8_t b = static_cast<uint8_t>(cpu.y());
+            framebuffer_data[y * 256 + x] = 0xFF000000 | (r << 16) | (g << 8) | b;
+        }
+    }
 }
