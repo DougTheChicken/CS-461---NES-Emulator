@@ -4,11 +4,32 @@ namespace nes {
     class PPU {
     public:
 
+        // All register fields from https://www.nesdev.org/wiki/PPU_registers
+        // Useful knowledge https://austinmorlan.com/posts/nes_rendering_overview/
         PPU();
 
-        // All register fields from https://www.nesdev.org/wiki/PPU_registers
+        static void reset();
+        void step();
 
-        // Useful knowledge https://austinmorlan.com/posts/nes_rendering_overview/
+        // from https://www.nesdev.org/wiki/PPU_registers#Summary
+        // CPU interface for $2000 - $2007
+        uint8_t cpu_read_register(uint16_t address);   // CPU reads $2000-$2007
+        void cpu_write_register(uint16_t address, uint8_t value);  // CPU writes $2000-$2007
+
+        // PPU addressable space $0000 - $3FFF
+        // TODO: determine if these wrappers are necessary. default to private bus read/write for now.
+        // uint8_t ppu_read(uint16_t address);
+        // void ppu_write(uint16_t address, uint8_t value);
+
+        // CPU interface for $4014
+        void cpu_write_oamdma(uint8_t page);
+        void oamdma_execute(uint8_t* page_data); // CPU/bus operation so PPU can get data
+
+        // PPU cannot directly access memory outside of its own space
+        // so we get handed callback methods by the mapper or cartridge
+        // that the PPU can then use to access  pattern tables $0000-$1FFF
+        void set_chr_read_callback(uint8_t (*callback)(uint16_t));
+        void set_chr_write_callback(void (*callback)(uint16_t, uint8_t));
 
         // $2000 values
         uint8_t base_nametable_select = 0; // nametable x and y
@@ -62,15 +83,6 @@ namespace nes {
 
         // $2005 values PPUSCROLL - X and Y scroll ($2005 write)
         // from https://www.nesdev.org/wiki/PPU_registers#PPUSCROLL_-_X_and_Y_scroll_($2005_write)
-        // This register is used to change the scroll position, telling the PPU which pixel of the nametable
-        // selected through PPUCTRL should be at the top left corner of the rendered screen. PPUSCROLL takes
-        // two writes: the first is the X scroll and the second is the Y scroll. Whether this is the first or
-        // second write is tracked internally by the w register, which is shared with PPUADDR. Typically, this
-        // register is written to during vertical blanking to make the next frame start rendering from the
-        // desired location, but it can also be modified during rendering in order to split the screen.
-        // Changes made to the vertical scroll during rendering will only take effect on the next frame.
-        // Together with the nametable bits in PPUCTRL, the scroll can be thought of as 9 bits per component,
-        // and PPUCTRL must be updated along with PPUSCROLL to fully specify the scroll position.
 
         // ********
         // The PPU scroll registers share internal state with the PPU address registers. Because of this,
@@ -113,29 +125,6 @@ namespace nes {
         // Non-Maskable Interrupt management
         bool nmi_pending = false;  // signal to CPU: take NMI
         bool nmi_prev = false;     // edge detect previous (vblank_flag && vblank_nmi_flag)
-
-        // from https://www.nesdev.org/wiki/PPU_registers#Summary
-        // CPU interface for $2000 - $2007
-        uint8_t cpu_read_register(uint16_t address);   // CPU reads $2000-$2007
-        void cpu_write_register(uint16_t address, uint8_t value);  // CPU writes $2000-$2007
-
-        // PPU addressable space $0000 - $3FFF
-        // TODO: determine if these wrappers are necessary. default to private bus read/write for now.
-        // uint8_t ppu_read(uint16_t address);
-        // void ppu_write(uint16_t address, uint8_t value);
-
-        // CPU interface for $4014
-        void cpu_write_oamdma(uint8_t page);
-        void oamdma_execute(uint8_t* page_data); // CPU/bus operation so PPU can get data
-
-        // PPU cannot directly access memory outside of its own space
-        // so we get handed callback methods by the mapper or cartridge
-        // that the PPU can then use to access  pattern tables $0000-$1FFF
-        void set_chr_read_callback(uint8_t (*callback)(uint16_t));
-        void set_chr_write_callback(void (*callback)(uint16_t, uint8_t));
-
-        static void reset();
-        void step();
 
     private:
         // internal PPU bus routing with no CPU side effects
