@@ -7,6 +7,8 @@ namespace nes {
 
         // All register fields from https://www.nesdev.org/wiki/PPU_registers
 
+        // Useful knowledge https://austinmorlan.com/posts/nes_rendering_overview/
+
         // $2000 values
         uint8_t base_nametable_select = 0; // nametable x and y
         bool vram_address_increment_flag = false; //  (0: add 1, going across; 1: add 32, going down)
@@ -125,6 +127,12 @@ namespace nes {
         void cpu_write_oamdma(uint8_t page);
         void oamdma_execute(uint8_t* page_data); // CPU/bus operation so PPU can get data
 
+        // PPU cannot directly access memory outside of its own space
+        // so we get handed callback methods by the mapper or cartridge
+        // that the PPU can then use to access  pattern tables $0000-$1FFF
+        void set_chr_read_callback(uint8_t (*callback)(uint16_t));
+        void set_chr_write_callback(void (*callback)(uint16_t, uint8_t));
+
         void reset();
         void step();
 
@@ -157,5 +165,9 @@ namespace nes {
         // color 0 of each sprite palette is transparent, so these addresses
         // instead access the background palette.
         uint16_t mirror_palette_address(uint16_t address);
+
+        // fields for CHR ROM/RAM callbacks (pattern tables $0000-$1FFF)
+        uint8_t (*chr_read_callback)(uint16_t) = nullptr;
+        void (*chr_write_callback)(uint16_t, uint8_t) = nullptr;
     };
 }
