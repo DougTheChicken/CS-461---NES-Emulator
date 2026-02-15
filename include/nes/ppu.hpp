@@ -4,6 +4,7 @@ namespace nes {
     class PPU {
     public:
 
+        PPU();
 
         // All register fields from https://www.nesdev.org/wiki/PPU_registers
 
@@ -133,7 +134,7 @@ namespace nes {
         void set_chr_read_callback(uint8_t (*callback)(uint16_t));
         void set_chr_write_callback(void (*callback)(uint16_t, uint8_t));
 
-        void reset();
+        static void reset();
         void step();
 
     private:
