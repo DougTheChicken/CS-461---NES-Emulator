@@ -9,11 +9,18 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ---- GoogleTest (imported targets) ----
 find_package(GTest CONFIG REQUIRED)
 
-# ---- SFML2 ----
-find_package(SFML 2.5 COMPONENTS graphics window system REQUIRED)
-
-# ---- macOS SDK convenience (optional) ----
 if(APPLE)
+    # Prefer Homebrew keg-only sfml@2 if present (Apple Silicon or Intel)
+    foreach(_sfml_prefix
+            "/opt/homebrew/opt/sfml@2"
+            "/usr/local/opt/sfml@2")
+        if(EXISTS "${_sfml_prefix}/lib/cmake/SFML/SFMLConfig.cmake")
+            list(PREPEND CMAKE_PREFIX_PATH "${_sfml_prefix}")
+            break()
+        endif()
+    endforeach()
+
+    # ---- macOS SDK convenience (optional) ----
     execute_process(COMMAND xcrun --show-sdk-path
             OUTPUT_VARIABLE SDK_PATH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -21,6 +28,14 @@ if(APPLE)
         add_compile_options(-isysroot "${SDK_PATH}")
         add_link_options(-isysroot "${SDK_PATH}")
     endif()
+endif()
+
+
+# ---- SFML2 ----
+# Ask for SFML 2.5+ (allows Homebrew sfml@2 2.6.x), prefer CONFIG mode
+find_package(SFML 2.5 CONFIG QUIET COMPONENTS graphics window system)
+if(NOT SFML_FOUND)
+    find_package(SFML 2.5 COMPONENTS graphics window system REQUIRED)
 endif()
 
 # ---- Library: all sources under src/, EXCEPT main.cpp and ui/ ----
@@ -37,10 +52,10 @@ target_include_directories(nes_lib
 
 # ---- UI Library ----
 add_library(nes_ui STATIC
-    ${PROJECT_SOURCE_DIR}/src/ui/ui.cpp
+        ${PROJECT_SOURCE_DIR}/src/ui/ui.cpp
 )
 target_include_directories(nes_ui
-    PUBLIC
+        PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )

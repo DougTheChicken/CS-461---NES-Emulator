@@ -32,7 +32,7 @@ build/          Out-of-source build artifacts
 
 ### macOS
 ```bash
-brew install sdl2 cmake googletest
+brew install sdl2 cmake googletest sfml@2
 make build
 make run
 make test
