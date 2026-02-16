@@ -40,7 +40,7 @@ make test
 
 ### Ubuntu/Debian
 ```bash
-sudo apt-get update && sudo apt-get install -y libsdl2-dev cmake g++ libgtest-dev libgmock-dev
+sudo apt-get update && sudo apt-get install -y libsdl2-dev cmake g++ libgtest-dev libgmock-dev libsfml-dev
 sudo cmake -S /usr/src/googletest -B /tmp/build-gtest
 sudo cmake --build /tmp/build-gtest --config Release
 sudo cmake --install /tmp/build-gtest
