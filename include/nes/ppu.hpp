@@ -6,6 +6,7 @@ namespace nes {
 
         // All register fields from https://www.nesdev.org/wiki/PPU_registers
         // Useful knowledge https://austinmorlan.com/posts/nes_rendering_overview/
+        // Sprite-specific https://setsideb.com/behind-the-code-about-the-nes-sprite-capabilities
         PPU();
 
         static void reset();
@@ -170,7 +171,15 @@ namespace nes {
         uint8_t next_pattern_low = 0;
         uint8_t next_pattern_high = 0;
 
-        // sprite shift registers, up to 8 sprites can be managed at once in parallel
+        // from: https://setsideb.com/behind-the-code-about-the-nes-sprite-capabilities
+        // The gist: while each scanline is being prepared for display, the NES’ PPU looks
+        // through the entries for the machine’s 64 hardware sprites in order, finds the first
+        // eight that will display on the current line, and copies their attribute data to a
+        // small area of internal RAM. There is only space there for eight sprites, so, the
+        // NES cannot display more than eight sprites in a single scan line. Any later sprites
+        // in the primary attribute data won’t have room to be copied, and so the PPU won’t be
+        // able to display them.
+        // sprite shift registers
         uint8_t spr_shift_low[8]{}, spr_shift_high[8]{};
         uint8_t spr_x[8]{}, spr_attr[8]{};
         uint8_t spr_oam_index[8]{};
