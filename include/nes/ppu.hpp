@@ -159,5 +159,21 @@ namespace nes {
         // fields for CHR ROM/RAM callbacks (pattern tables $0000-$1FFF)
         uint8_t (*chr_read_callback)(uint16_t) = nullptr;
         void (*chr_write_callback)(uint16_t, uint8_t) = nullptr;
+
+        // background shift registers
+        uint16_t bg_pattern_low = 0, bg_pattern_high = 0;
+        uint16_t bg_attr_low = 0, bg_attr_high = 0;
+
+        // latches for the next 8 pixels, persistent across 8-cycle fetch batch
+        uint8_t next_tile_id = 0;
+        uint8_t next_attr = 0;
+        uint8_t next_pattern_low = 0;
+        uint8_t next_pattern_high = 0;
+
+        // sprite shift registers, up to 8 sprites can be managed at once in parallel
+        uint8_t spr_shift_low[8]{}, spr_shift_high[8]{};
+        uint8_t spr_x[8]{}, spr_attr[8]{};
+        uint8_t spr_oam_index[8]{};
+        int sprite_count = 0;
     };
 }
