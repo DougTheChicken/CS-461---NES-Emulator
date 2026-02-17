@@ -200,6 +200,11 @@ namespace nes
         bool nmi_pending = false; // signal to CPU: take NMI
         bool nmi_prev = false; // edge detect previous (vblank_flag && vblank_nmi_flag)
 
+        // framebuffer for output
+        uint32_t framebuffer[256*240];
+        bool frame_complete = false;
+        const uint32_t* framebuffer_output() const;
+
     private:
         // internal PPU bus routing with no CPU side effects
         uint8_t ppu_bus_read(uint16_t address);
