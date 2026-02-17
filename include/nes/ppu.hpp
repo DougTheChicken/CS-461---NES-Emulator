@@ -1,21 +1,98 @@
 #pragma once
 #include <cstdint>
-namespace nes {
-    class PPU {
-    public:
 
+namespace nes
+{
+    class PPU;
+
+    class Scanline
+    {
+    public:
+        explicit Scanline(PPU& ppu) : ppu(ppu)
+        {
+        }
+        // TODO: define Scanline public and private methods
+
+        // from https://www.nesdev.org/wiki/PPU_rendering?utm_source=chatgpt.com#Line-by-line_timing
+        // line-by-line timing
+        bool odd_frame = false; // For odd frames, the cycle at the end of the scanline is skipped
+        int16_t scanline = -1; // -1 prerender, 0-239 render, 240 post-render; 241-260 vblank
+        uint16_t cycle = 0; // 0 - 340 (https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png)
+
+    private:
+        PPU& ppu;
+    }; // end class Scanline
+
+    class BackgroundPipeline
+    {
+    public:
+        explicit BackgroundPipeline(PPU& ppu) : ppu(ppu)
+        {
+        }
+        // TODO: define Background public and private methods
+
+    private:
+        PPU& ppu;
+
+        // background shift registers
+        uint16_t bg_pattern_low = 0, bg_pattern_high = 0;
+        uint16_t bg_attr_low = 0, bg_attr_high = 0;
+
+        // latches for the next 8 pixels, persistent across 8-cycle fetch batch
+        uint8_t next_tile_id = 0;
+        uint8_t next_attr = 0;
+        uint8_t next_pattern_low = 0;
+        uint8_t next_pattern_high = 0;
+    }; // end class BackgroundPipeline
+
+    class SpritePipeline
+    {
+    public:
+        explicit SpritePipeline(PPU& ppu) : ppu(ppu)
+        {
+        }
+        // TODO: define SpritePipeline public and private methods
+
+    private:
+        PPU& ppu;
+
+        // from: https://setsideb.com/behind-the-code-about-the-nes-sprite-capabilities
+        // The gist: while each scanline is being prepared for display, the NES’ PPU looks
+        // through the entries for the machine’s 64 hardware sprites in order, finds the first
+        // eight that will display on the current line, and copies their attribute data to a
+        // small area of internal RAM. There is only space there for eight sprites, so, the
+        // NES cannot display more than eight sprites in a single scan line. Any later sprites
+        // in the primary attribute data won’t have room to be copied, and so the PPU won’t be
+        // able to display them.
+        // sprite shift registers
+        uint8_t spr_shift_low[8]{}, spr_shift_high[8]{};
+        uint8_t spr_x[8]{}, spr_attr[8]{};
+        uint8_t spr_oam_index[8]{};
+        int sprite_count = 0;
+
+        // secondary OAM working set for the current scanline
+        uint8_t secondary_oam[32] = {}; // 8 sprites * 4 bytes
+        int secondary_count = 0;
+    }; // end class SpritePipeline
+
+    class PPU
+    {
+    public:
         // All register fields from https://www.nesdev.org/wiki/PPU_registers
         // Useful knowledge https://austinmorlan.com/posts/nes_rendering_overview/
         // Sprite-specific https://setsideb.com/behind-the-code-about-the-nes-sprite-capabilities
         PPU();
+        BackgroundPipeline bg;
+        SpritePipeline sprites;
+        Scanline timing;
 
         static void reset();
         void step();
 
         // from https://www.nesdev.org/wiki/PPU_registers#Summary
         // CPU interface for $2000 - $2007
-        uint8_t cpu_read_register(uint16_t address);   // CPU reads $2000-$2007
-        void cpu_write_register(uint16_t address, uint8_t value);  // CPU writes $2000-$2007
+        uint8_t cpu_read_register(uint16_t address); // CPU reads $2000-$2007
+        void cpu_write_register(uint16_t address, uint8_t value); // CPU writes $2000-$2007
 
         // PPU addressable space $0000 - $3FFF
         // TODO: determine if these wrappers are necessary. default to private bus read/write for now.
@@ -32,12 +109,14 @@ namespace nes {
         void set_chr_read_callback(uint8_t (*callback)(uint16_t));
         void set_chr_write_callback(void (*callback)(uint16_t, uint8_t));
 
+
+
         // $2000 values
         uint8_t base_nametable_select = 0; // nametable x and y
         bool vram_address_increment_flag = false; //  (0: add 1, going across; 1: add 32, going down)
         bool sprite_pattern_table_address_flag = false; // $0000 when clear, $1000 when set
         bool background_pattern_table_address_flag = false; // $0000 when clear, $1000 when set
-        bool sprite_size_flag = false;  // 8x16 when set
+        bool sprite_size_flag = false; // 8x16 when set
         bool ppu_master_slave_flag = false; //(0: read backdrop from EXT pins; 1: output color on EXT pins)
         bool vblank_nmi_flag = false; // (0: off, 1: on) NMI enable on vblank
 
@@ -76,7 +155,7 @@ namespace nes {
         //  $3, $7, $B, $F 	    Sprite X coordinate
 
         // $2003 values OAMADDR - Sprite RAM address ($2003 write)
-        uint8_t oam_address = 0;  // address for OAM read/write
+        uint8_t oam_address = 0; // address for OAM read/write
 
         // $2004 values  OAMDATA - Sprite RAM data  ($2004 read/write)
         // implemented via oam[oam_address] calls. comment left for completeness.
@@ -96,7 +175,7 @@ namespace nes {
         // internal register t: Temporary VRAM address (15 bits)
         uint16_t t = 0;
 
-         // fine-x position of the current scroll, used during rendering alongside v.
+        // fine-x position of the current scroll, used during rendering alongside v.
         uint8_t x = 0;
 
         // toggles on each write to either PPUSCROLL or PPUADDR, indicating whether this is the first or second
@@ -117,15 +196,9 @@ namespace nes {
         uint8_t palette_ram[32] = {}; // $3F00-$3F1F (with mirrors)
         uint8_t oam[256] = {}; // Primary OAM (64 sprites * 4 bytes)
 
-        // from https://www.nesdev.org/wiki/PPU_rendering?utm_source=chatgpt.com#Line-by-line_timing
-        // line-by-line timing
-        bool odd_frame = false; // For odd frames, the cycle at the end of the scanline is skipped
-        int16_t scanline = -1; // -1 prerender, 0-239 render, 240 post-render; 241-260 vblank
-        uint16_t cycle = 0; // 0 - 340 (https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png)
-
         // Non-Maskable Interrupt management
-        bool nmi_pending = false;  // signal to CPU: take NMI
-        bool nmi_prev = false;     // edge detect previous (vblank_flag && vblank_nmi_flag)
+        bool nmi_pending = false; // signal to CPU: take NMI
+        bool nmi_prev = false; // edge detect previous (vblank_flag && vblank_nmi_flag)
 
     private:
         // internal PPU bus routing with no CPU side effects
@@ -161,28 +234,9 @@ namespace nes {
         uint8_t (*chr_read_callback)(uint16_t) = nullptr;
         void (*chr_write_callback)(uint16_t, uint8_t) = nullptr;
 
-        // background shift registers
-        uint16_t bg_pattern_low = 0, bg_pattern_high = 0;
-        uint16_t bg_attr_low = 0, bg_attr_high = 0;
-
-        // latches for the next 8 pixels, persistent across 8-cycle fetch batch
-        uint8_t next_tile_id = 0;
-        uint8_t next_attr = 0;
-        uint8_t next_pattern_low = 0;
-        uint8_t next_pattern_high = 0;
-
-        // from: https://setsideb.com/behind-the-code-about-the-nes-sprite-capabilities
-        // The gist: while each scanline is being prepared for display, the NES’ PPU looks
-        // through the entries for the machine’s 64 hardware sprites in order, finds the first
-        // eight that will display on the current line, and copies their attribute data to a
-        // small area of internal RAM. There is only space there for eight sprites, so, the
-        // NES cannot display more than eight sprites in a single scan line. Any later sprites
-        // in the primary attribute data won’t have room to be copied, and so the PPU won’t be
-        // able to display them.
-        // sprite shift registers
-        uint8_t spr_shift_low[8]{}, spr_shift_high[8]{};
-        uint8_t spr_x[8]{}, spr_attr[8]{};
-        uint8_t spr_oam_index[8]{};
-        int sprite_count = 0;
+        // want these to access PPU state without shipping a DTO around since we're all friends here.
+        friend class BackgroundPipeline;
+        friend class Scanline;
+        friend class SpritePipeline;
     };
 }
