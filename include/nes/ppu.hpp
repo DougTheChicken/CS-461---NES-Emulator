@@ -201,7 +201,7 @@ namespace nes
         bool nmi_prev = false; // edge detect previous (vblank_flag && vblank_nmi_flag)
 
         // framebuffer for output
-        uint32_t framebuffer[256*240];
+        uint32_t framebuffer[256*240]{};
         bool frame_complete = false;
         const uint32_t* framebuffer_output() const;
 
