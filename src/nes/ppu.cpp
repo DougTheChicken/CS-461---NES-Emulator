@@ -83,9 +83,30 @@ namespace nes {
 
     }
 
+    // given a 14-bit address and a value, write it to the correct memory.
+    // teh address determines where we write to
     void PPU::ppu_bus_write(uint16_t address, uint8_t value)
     {
+        // clamp to 14-bitspace
+        address &= 0x3FFF;
 
+        if (address < 0x2000)
+        {
+            // TODO: is this sufficient for now for cart/CHR writes?
+            chr_ram[address] = value;
+        }
+        // $2000 - $3EFF nametable write
+        else if (address < 0x3F00)
+        {
+            // get index from mirrored address and stick the value in the spot
+            nametable_ram[mirror_nametable_address(address)] = value;
+        }
+        // $3F00 - $3FFF palelette write
+        else if (address < 0x4000)
+        {
+            // get index from mirrored address and stick the value in the spot
+            palette_ram[mirror_palette_address(address)] = value;
+        }
     }
 
     // Memory address mirroring helper

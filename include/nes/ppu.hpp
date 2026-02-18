@@ -196,6 +196,10 @@ namespace nes
         uint8_t palette_ram[32] = {}; // $3F00-$3F1F (with mirrors)
         uint8_t oam[256] = {}; // Primary OAM (64 sprites * 4 bytes)
 
+        // https://www.nesdev.org/wiki/CHR_ROM_vs_CHR_RAM
+        // Cartridge RAM $0000 - $1FFF
+        uint8_t chr_ram[0x2000] = {};
+
         // Non-Maskable Interrupt management
         bool nmi_pending = false; // signal to CPU: take NMI
         bool nmi_prev = false; // edge detect previous (vblank_flag && vblank_nmi_flag)
