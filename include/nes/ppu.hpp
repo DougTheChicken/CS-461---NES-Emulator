@@ -205,6 +205,9 @@ namespace nes
         bool frame_complete = false;
         const uint32_t* framebuffer_output() const;
 
+        // are we doing vertical or horizontal mirroring
+        bool vertical_mirroring = false;
+
     private:
         // internal PPU bus routing with no CPU side effects
         uint8_t ppu_bus_read(uint16_t address);

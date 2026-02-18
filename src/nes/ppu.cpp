@@ -83,16 +83,63 @@ namespace nes {
 
     }
 
-    void ppu_bus_write(uint16_t address, uint8_t value)
+    void PPU::ppu_bus_write(uint16_t address, uint8_t value)
     {
 
     }
 
     // Memory address mirroring helper
     // https://www.nesdev.org/wiki/Mirroring#Nametable_Mirroring
-    //
-    uint16_t mirror_nametable_address(uint16_t address)
+    // 4 logical nametables indexed each as a 1kb nametable with an offset
+    // $2000–$23FF (NT0)
+    // $2400–$27FF (NT1)
+    // $2800–$2BFF (NT2)
+    // $2C00–$2FFF (NT3)
+    uint16_t PPU::mirror_nametable_address(uint16_t address)
     {
+        // Fold $3000-$3EFF down into $2000-$2EFF since it is a complete mirror
+        address &= 0x2FFF;
+
+        // get our offset into the 4kb space
+        uint16_t offset = address - 0x2000;
+
+        // find which nametable (0..3) it belongs to
+        uint16_t table  = offset >> 10;
+
+        // get our index into our nametable 0..0x3FF
+        // by masking to keep lower 10-bits to get 0..1023
+        uint16_t index  = offset & 0x03FF;
+
+        // real physical memory page the address uses: either 0 or 1 that
+        // the logical table maps to after mirroring
+        uint16_t physical;
+
+        // vertical mirror maps
+        // NT0 and NT1 to physical 0
+        // NT2 and NT3 to physical 1
+        if (vertical_mirroring)
+        {
+            // use upper bit of logical nametable index
+            // 00, 01 become 0 and 10, 11 become 1
+            physical = table >> 1;
+        }
+
+        // horizontal mirror maps
+        // NT0 nad NT2 to physical 0
+        // NT1 and NT3 to physical 1
+        else
+        {
+            // user lower bit of logical nametable index
+            // 00 -> 0 and 10 -> 0
+            // 01 -> 1 and 11 -> 1
+            physical = table & 1;
+        }
+
+        // physical selects which 1 KB nametable page (0 or 1)
+        // index selects the byte within that page (0–1023)
+        // final address = page_base + in-page offset which is a
+        // final index into 2kb of nametable VRAM 0x000-0x7FF
+        return (physical * 0x0400) + index;
 
     }
 
@@ -103,7 +150,7 @@ namespace nes {
     // color 0 of each sprite palette is transparent, so these addresses
     // instead access the background palette.
     // yields an index from 0..31 for accessing the palette table
-    uint16_t mirror_palette_address(uint16_t address)
+    uint16_t PPU::mirror_palette_address(uint16_t address)
     {
         // $3F10 becomes 0x10, etc
         address &= 0x3FFF;
