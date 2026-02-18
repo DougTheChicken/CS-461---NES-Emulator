@@ -53,9 +53,14 @@ namespace nes {
         return value;
     }
 
+    // from https://www.nesdev.org/wiki/PPU_programmer_reference#PPUDATA_-_VRAM_data_($2007_read/write)
+    // write the value at the v address and increment v
     void PPU::cpu_write_ppudata(uint8_t value)
     {
-
+        // masked to PPUDATA region for safety
+        uint16_t addr = v & 0x3FFF;
+        ppu_bus_write(addr, value);
+        increment_v();
     }
 
     uint8_t PPU::cpu_read_register(uint16_t address)
@@ -77,6 +82,42 @@ namespace nes {
     {
 
     }
+
+    void ppu_bus_write(uint16_t address, uint8_t value)
+    {
+
+    }
+
+    // Memory address mirroring helper
+    // https://www.nesdev.org/wiki/Mirroring#Nametable_Mirroring
+    //
+    uint16_t mirror_nametable_address(uint16_t address)
+    {
+
+    }
+
+    // Memory address mirroring helper
+    // Addresses  $3F10, $3F14, $3F18, and $3F1C are
+    // mirrors of $3F00, $3F04, $3F08, and $3F0C respectively.
+    // The sprite palette entries at these addresses are unused because
+    // color 0 of each sprite palette is transparent, so these addresses
+    // instead access the background palette.
+    // yields an index from 0..31 for accessing the palette table
+    uint16_t mirror_palette_address(uint16_t address)
+    {
+        // $3F10 becomes 0x10, etc
+        address &= 0x3FFF;
+
+        uint8_t i = 0;
+        if (address == 0x10) i = 0x00;
+        if (address == 0x14) i = 0x04;
+        if (address == 0x18) i = 0x08;
+        if (address == 0x1C) i = 0x0C;
+
+        return i;
+
+    }
+
 
     void PPU::increment_v()
     {

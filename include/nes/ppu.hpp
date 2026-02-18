@@ -228,11 +228,6 @@ namespace nes
         // returns canonical address in $3F00-$3F1F after folding in address
         // and applying the sprint to background mirror quirk
         // from https://www.nesdev.org/wiki/PPU_palettes
-        // Addresses  $3F10, $3F14, $3F18, and $3F1C are
-        // mirrors of $3F00, $3F04, $3F08, and $3F0C respectively.
-        // The sprite palette entries at these addresses are unused because
-        // color 0 of each sprite palette is transparent, so these addresses
-        // instead access the background palette.
         uint16_t mirror_palette_address(uint16_t address);
 
         // fields for CHR ROM/RAM callbacks (pattern tables $0000-$1FFF)
