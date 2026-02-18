@@ -7,8 +7,13 @@ namespace nes {
     // PPU
     // ============================================================================
 
+
     PPU::PPU() : bg(*this), sprites(*this), timing(*this) { reset(); }
-    void PPU::reset() {}
+
+    void PPU::reset()
+    {
+        oam_address = 0;
+    }
 
     // https://www.nesdev.org/wiki/PPU_registers#PPUDATA_-_VRAM_data_($2007_read/write)
     uint8_t PPU::cpu_read_ppudata()
@@ -73,9 +78,13 @@ namespace nes {
 
     }
 
-    void PPU::cpu_write_oamdma(uint8_t page)
-    {
-
+    // from https://www.nesdev.org/wiki/PPU_OAM#DMA
+    // we get a page from Memory and put 256 bytes in oam in 1 shot
+    void PPU::oamdma_copy_256(const uint8_t* page_data) {
+        for (int i = 0; i < 256; i++)
+        {
+            oam[oam_address++] = page_data[i];
+        }
     }
 
     uint8_t PPU::ppu_bus_read(uint16_t address)

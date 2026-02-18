@@ -86,7 +86,7 @@ namespace nes
         SpritePipeline sprites;
         Scanline timing;
 
-        static void reset();
+        void reset();
         void step();
 
         // from https://www.nesdev.org/wiki/PPU_registers#Summary
@@ -100,7 +100,6 @@ namespace nes
         // void ppu_write(uint16_t address, uint8_t value);
 
         // CPU interface for $4014
-        void cpu_write_oamdma(uint8_t page);
         void oamdma_execute(uint8_t* page_data); // CPU/bus operation so PPU can get data
 
         // PPU cannot directly access memory outside of its own space
@@ -205,7 +204,7 @@ namespace nes
         bool nmi_prev = false; // edge detect previous (vblank_flag && vblank_nmi_flag)
 
         // framebuffer for output
-        uint32_t framebuffer[256*240];
+        uint32_t framebuffer[256*240]{};
         bool frame_complete = false;
         const uint32_t* framebuffer_output() const;
 
