@@ -88,9 +88,27 @@ namespace nes {
         }
     }
 
+    // given a 14-bit address and a value, read it from the correct memory.
+    // teh address determines where we read from
     uint8_t PPU::ppu_bus_read(uint16_t address)
     {
+        // clamp to 14-bitspace
+        address &= 0x3FFF;
 
+        if (address < 0x2000)
+        {
+            // TODO: is this sufficient for now for cart/CHR reads?
+            return chr_ram[address];
+        }
+        // $2000 - $3EFF nametable read
+        if (address < 0x3F00)
+        {
+            // get index from mirrored address and get the value in the spot
+            return nametable_ram[mirror_nametable_address(address)];
+        }
+        // $3F00 - $3FFF palelette read
+        // get index from mirrored address and get the value in the spot
+        return palette_ram[mirror_palette_address(address)];
     }
 
     // given a 14-bit address and a value, write it to the correct memory.
