@@ -32,7 +32,7 @@ build/          Out-of-source build artifacts
 
 ### macOS
 ```bash
-brew install sdl2 cmake googletest
+brew install sdl2 cmake googletest sfml@2
 make build
 make run
 make test
@@ -40,7 +40,7 @@ make test
 
 ### Ubuntu/Debian
 ```bash
-sudo apt-get update && sudo apt-get install -y libsdl2-dev cmake g++ libgtest-dev libgmock-dev
+sudo apt-get update && sudo apt-get install -y libsdl2-dev cmake g++ libgtest-dev libgmock-dev libsfml-dev
 sudo cmake -S /usr/src/googletest -B /tmp/build-gtest
 sudo cmake --build /tmp/build-gtest --config Release
 sudo cmake --install /tmp/build-gtest
