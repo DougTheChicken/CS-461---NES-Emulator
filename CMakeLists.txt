@@ -69,6 +69,7 @@ add_executable(nes_emu ${PROJECT_SOURCE_DIR}/src/main.cpp
         include/nes/apu.hpp
         src/nes/ROM.cpp
         src/nes/apu.cpp
+        src/nes/ppu.cpp
 )
 target_link_libraries(nes_emu PRIVATE nes_lib nes_ui)
 
