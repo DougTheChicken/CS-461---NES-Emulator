@@ -139,13 +139,13 @@ namespace nes {
         {
         case 0x2000: // PPUCTRL https://www.nesdev.org/wiki/PPU_registers#PPUCTRL_-_Miscellaneous_settings_($2000_write)
             {
-                base_nametable_select              = (value & 0x03);
-                vram_address_increment_flag        = (value & 0x04) != 0;
-                sprite_pattern_table_address_flag  = (value & 0x08) != 0;
-                background_pattern_table_address_flag = (value & 0x10) != 0;
-                sprite_size_flag                   = (value & 0x20) != 0;
-                ppu_master_slave_flag              = (value & 0x40) != 0;
-                vblank_nmi_flag                    = (value & 0x80) != 0;
+                base_nametable_select                   = (value & 0x03);
+                vram_address_increment_flag             = (value & 0x04) != 0;
+                sprite_pattern_table_address_flag       = (value & 0x08) != 0;
+                background_pattern_table_address_flag   = (value & 0x10) != 0;
+                sprite_size_flag                        = (value & 0x20) != 0;
+                ppu_master_slave_flag                   = (value & 0x40) != 0;
+                vblank_nmi_flag                         = (value & 0x80) != 0;
 
                 // temp vram t bits 11-10 are for nametable select and come from PPUCTRL 1-0
                 t = (t & 0xF3FF) | ((value & 0x03) << 10);
@@ -179,18 +179,48 @@ namespace nes {
             }
         case 0x2005: // PPUSCROLL https://www.nesdev.org/wiki/PPU_registers#PPUSCROLL
             {
-                // TODO: anything
+                // change the scroll position, telling the PPU which pixel of the nametable selected through
+                // PPUCTRL should be at the top left corner of the rendered screen.
+                // PPUSCROLL takes two writes:
+                // the first is the X scroll and the second is the Y scroll.
+                // Whether this is the first or second write is tracked internally by the w register,
+                if (!w)
+                {
+                    // first write is horizontal x
+                    // fine X   = value bits 2–0  → x
+                    x = value & 0x07;
+
+                    // coarse X = value bits 7–3  → t bits 4–0
+                    t = (t & 0xFFE0) | (value >> 3);
+                }
+                else
+                {
+                    // second write is vertical y
+                    // fine Y   = value bits 2–0  → t bits 14–12
+                    t = (t & 0x8FFF) | ((value & 0x07) << 12); // fine Y
+
+                    // coarse Y = value bits 7–3  → t bits 9–5
+                    t = (t & 0xFC1F) | ((value & 0xF8) << 2);
+                }
+
+                // flip first write bit
+                w = !w;
                 break;
             }
         case 0x2006: // PPUADDR https://www.nesdev.org/wiki/PPU_registers#PPUADDR
             {
-
                 // Whether this is the first or second write is tracked by the PPU's internal w register
                 if (!w)
                 {
                     // we carefully write temporary VRAM t while preserving x and scroll by masking
                     // by writing top 6 bits
                     t = (t & 0x00FF) | ((value & 0x3F) << 8);
+
+                    // "However, bit 14 of the internal t register that holds the data written to PPUADDR is forced
+                    // to 0 when writing the PPUADDR high byte. This detail doesn't matter when using PPUADDR to set
+                    // a VRAM address, but is an important limitation when using it to control mid-screen scrolling"
+                    // so force bit 14 to 0 but don't touch any other bits
+                    t &= ~0x4000;
                 }
                 else
                 {
@@ -201,7 +231,7 @@ namespace nes {
                     v = t;
                 }
 
-                // flip w
+                // flip first write bit
                 w = !w;
                 break;
             }
