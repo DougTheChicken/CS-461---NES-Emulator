@@ -1,17 +1,20 @@
 #include "nes/mem.hpp"
 #include <cstring>
 #include <cstdio>
+#include "nes/apu.hpp"
+#include "nes/ppu.hpp"
 
 namespace nes {
 
-Memory::Memory() {
+Memory::Memory(PPU& ppu_, APU& apu_) : ppu(ppu_), apu(apu_) {
     reset();
 }
 
 void Memory::reset() {
     std::memset(ram, 0, sizeof(ram));
-    std::memset(ppu_regs, 0, sizeof(ppu_regs));
-    std::memset(apu_regs, 0, sizeof(apu_regs));
+    //std::memset(ppu_regs, 0, sizeof(ppu_regs));
+    //std::memset(apu_regs, 0, sizeof(apu_regs));
+
     controller1 = controller2 = 0;
     oam_dma = 0;
     // prg pointer and size are left as-is; console will re-map on ROM load
@@ -35,7 +38,7 @@ uint8_t Memory::read(uint16_t addr) {
         if (r == 0x2002) {
             return 0x80;
         }
-        return ppu_regs[r & 0x7];
+        return ppu.cpu_read_register(r);
     }
 
     // $4000-$4017: APU and I/O
@@ -43,7 +46,7 @@ uint8_t Memory::read(uint16_t addr) {
         if (addr == 0x4016) return controller1;
         if (addr == 0x4017) return controller2;
         if (addr == 0x4014) return oam_dma;
-        return apu_regs[addr - 0x4000];
+        if (addr == 0x4015) return apu.read_status();
     }
 
     // $8000-$FFFF: PRG ROM
@@ -70,17 +73,31 @@ void Memory::write(uint16_t addr, uint8_t value) {
 
     // $2000-$3FFF: PPU registers
     if (addr < 0x4000) {
-        uint16_t r = 0x2000 + (addr & 0x7);
-        ppu_regs[r & 0x7] = value;
+        //uint16_t r = 0x2000 + (addr & 0x7);
+        // ppu_regs[r & 0x7] = value;
+        // compute the register directly and write the value
+        ppu.cpu_write_register(0x2000 | (addr & 0x7), value);
         return;
     }
 
     // $4000-$4017: APU and I/O
     if (addr < 0x4018) {
-        if (addr == 0x4014) { oam_dma = value; return; }
+        if (addr == 0x4014) {
+            oam_dma = value;
+
+            uint8_t page[256];
+            uint16_t base = static_cast<uint16_t>(value) << 8;
+
+            for (uint16_t i = 0; i < 256; i++) {
+                page[i] = read(base +i); // cpu address space read
+            }
+            ppu.oam_dma_execute(page);
+            return;
+        }
         if (addr == 0x4016) { controller1 = value; return; }
-        if (addr == 0x4017) { controller2 = value; return; }
-        apu_regs[addr - 0x4000] = value;
+        // TODO: controller 2 can't write to 0x4017 because APU uses it as a frame counter
+        // if (addr == 0x4017) { controller2 = value; return; }
+        apu.write_register(addr, value);
         return;
     }
 

@@ -4,9 +4,13 @@
 
 namespace nes {
 
+// forward declarations
+class PPU;
+class APU;
+
 class Memory {
 public:
-    Memory();
+    Memory(PPU& ppu, APU& apu);
 
     // CPU-visible bus reads/writes
     uint8_t read(uint16_t addr);
@@ -34,9 +38,9 @@ private:
     uint8_t controller1 = 0;
     uint8_t controller2 = 0;
 
-    // PPU/APU registers (placeholders)
-    uint8_t ppu_regs[8]{};
-    uint8_t apu_regs[0x18]{};
+    // PPU/APU references
+    PPU& ppu; // rely on forward declarations of PPU
+    APU& apu; // and APU so we only store a pointer to them
 
     // DMA register placeholder ($4014)
     uint8_t oam_dma = 0;

@@ -80,10 +80,11 @@ namespace nes {
 
     // from https://www.nesdev.org/wiki/PPU_OAM#DMA
     // we get a page from Memory and put 256 bytes in oam in 1 shot
-    void PPU::oamdma_copy_256(const uint8_t* page_data) {
+    void PPU::oam_dma_execute(const uint8_t* page_data) {
         for (int i = 0; i < 256; i++)
         {
-            oam[oam_address++] = page_data[i];
+            oam[oam_address] = page_data[i];
+            oam_address = static_cast<uint8_t>(oam_address + 1); // heavyweight, but guarantee that wrapping happens
         }
     }
 

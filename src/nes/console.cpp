@@ -2,7 +2,8 @@
 #include <cstdio>
 #include <cstddef>
 
-console::console() { init(); }
+console::console() : rom(), ppu(), apu(), mem(ppu, apu), cpu()
+{ init(); }
 console::~console() = default;
 
 bool console::load_rom(char* filepath) {

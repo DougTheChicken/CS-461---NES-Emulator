@@ -4,6 +4,8 @@
 #include "nes/cpu.hpp"
 #include "nes/ROM.hpp"
 #include "nes/mem.hpp"
+#include "nes/ppu.hpp"
+#include "nes/apu.hpp"
 
 class console {
 public:
@@ -20,6 +22,8 @@ public:
 
 private:
     nes::ROM  rom;
+    nes::PPU ppu;
+    nes::APU apu;
     nes::Memory    mem;
     unsigned long long master_cycle_count = 0;
     nes::CPU  cpu;

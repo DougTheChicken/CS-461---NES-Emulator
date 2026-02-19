@@ -100,7 +100,7 @@ namespace nes
         // void ppu_write(uint16_t address, uint8_t value);
 
         // CPU interface for $4014
-        void oamdma_execute(uint8_t* page_data); // CPU/bus operation so PPU can get data
+        void oam_dma_execute(const uint8_t* page_data); // CPU/bus operation so PPU can get data
 
         // PPU cannot directly access memory outside of its own space
         // so we get handed callback methods by the mapper or cartridge
@@ -215,10 +215,6 @@ namespace nes
         // internal PPU bus routing with no CPU side effects
         uint8_t ppu_bus_read(uint16_t address);
         void ppu_bus_write(uint16_t address, uint8_t value);
-
-        // on oamdma_execute, internal PPU write into oam[(oam_address + i) & 0xFF] and
-        // increment oam_address
-        void oamdma_copy_256(const uint8_t* page_data);
 
         // $2007 helper methods
         uint8_t cpu_read_ppudata();
