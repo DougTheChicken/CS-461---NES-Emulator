@@ -133,38 +133,82 @@ namespace nes {
         // always place last value written on data bus aka "latch open bus"
         open_bus = value;
 
-        // address mirroring: CPU can write $2002 via $200A, $3FFA, ...
+        // address mirroring: CPU can write $2002 via $2008, $2010, ...
         // mask address &= 0x2007.
         switch (address & 0x2007)
         {
-        case 0x2000:
+        case 0x2000: // PPUCTRL https://www.nesdev.org/wiki/PPU_registers#PPUCTRL_-_Miscellaneous_settings_($2000_write)
             {
+                base_nametable_select              = (value & 0x03);
+                vram_address_increment_flag        = (value & 0x04) != 0;
+                sprite_pattern_table_address_flag  = (value & 0x08) != 0;
+                background_pattern_table_address_flag = (value & 0x10) != 0;
+                sprite_size_flag                   = (value & 0x20) != 0;
+                ppu_master_slave_flag              = (value & 0x40) != 0;
+                vblank_nmi_flag                    = (value & 0x80) != 0;
+
+                // temp vram t bits 11-10 are for nametable select and come from PPUCTRL 1-0
+                t = (t & 0xF3FF) | ((value & 0x03) << 10);
+
                 break;
             }
-        case 0x2001:
+        case 0x2001: // PPUMASK https://www.nesdev.org/wiki/PPU_registers#PPUMASK_-_Rendering_settings_($2001_write)
             {
+                greyscale_flag              = (value & 0x01) != 0;
+                leftmost_background_flag    = (value & 0x02) != 0;
+                leftmost_sprite_flag        = (value & 0x04) != 0;
+                background_rendering_flag   = (value & 0x08) != 0;
+                sprite_rendering_flag       = (value & 0x10) != 0;
+                emphasize_red               = (value & 0x20) != 0;
+                emphasize_green             = (value & 0x40) != 0;
+                emphasize_blue              = (value & 0x80) != 0;
+
                 break;
             }
-        case 0x2003:
+        case 0x2003: // OAMADDR https://www.nesdev.org/wiki/PPU_registers#OAMADDR_-_Sprite_RAM_address_($2003_write)
             {
+                oam_address = value;
                 break;
             }
             // from https://www.nesdev.org/wiki/PPU_registers#OAMDATA_-_Sprite_RAM_data_($2004_read/write)
         case 0x2004:
             {
-                oam[oam_address] =value;
+                // reads do not increment OAMADDR after reading but writes DO
+                oam[oam_address++] =value;
                 break;
             }
-        case 0x2005:
+        case 0x2005: // PPUSCROLL https://www.nesdev.org/wiki/PPU_registers#PPUSCROLL
             {
+                // TODO: anything
                 break;
             }
-        case 0x2006:
+        case 0x2006: // PPUADDR https://www.nesdev.org/wiki/PPU_registers#PPUADDR
             {
+
+                // Whether this is the first or second write is tracked by the PPU's internal w register
+                if (!w)
+                {
+                    // we carefully write temporary VRAM t while preserving x and scroll by masking
+                    // by writing top 6 bits
+                    t = (t & 0x00FF) | ((value & 0x3F) << 8);
+                }
+                else
+                {
+                    // write just the low byte
+                    t = (t & 0xFF00) | value;
+
+                    // copy to current VRAM  address
+                    v = t;
+                }
+
+                // flip w
+                w = !w;
                 break;
             }
-        case 0x2007:
+        case 0x2007: // PPUDATA
             {
+                ppu_bus_write(v, value);
+                increment_v();
                 break;
             }
         default:
