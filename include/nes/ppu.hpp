@@ -211,6 +211,9 @@ namespace nes
         // are we doing vertical or horizontal mirroring
         bool vertical_mirroring = false;
 
+        // last value on CPU-PPU line
+        uint8_t open_bus = 0;
+
     private:
         // internal PPU bus routing with no CPU side effects
         uint8_t ppu_bus_read(uint16_t address);

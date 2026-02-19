@@ -2,11 +2,9 @@
 
 namespace nes {
 
-
     // ============================================================================
     // PPU
     // ============================================================================
-
 
     PPU::PPU() : bg(*this), sprites(*this), timing(*this) { reset(); }
 
@@ -68,14 +66,112 @@ namespace nes {
         increment_v();
     }
 
+    // from https://www.nesdev.org/wiki/PPU_registers#Summary
+    // there are only 3 legitimate readable registers on the PPU,
+    // $2002 PPUSTATUS
+    // $2004 OAMDATA
+    // $2007 PPUDATA
+    // all other reads should return open bus (last value placed on the CPU data bus)
     uint8_t PPU::cpu_read_register(uint16_t address)
     {
-        return 1;
+        // default to last value placed on data bus
+        uint8_t value;
+
+        // address mirroring: CPU can read $2002 via $200A, $3FFA, ...
+        // mask address &= 0x2007.
+        switch (address & 0x2007)
+        {
+            // from https://www.nesdev.org/wiki/PPU_registers#PPUSTATUS_-_Rendering_events_($2002_read)
+            // 7  bit  0
+            // ---- ----
+            // VSOx xxxx
+            // |||| ||||
+            // |||+-++++- (PPU open bus or 2C05 PPU identifier)
+            // ||+------- Sprite overflow flag
+            // |+-------- Sprite 0 hit flag
+            // +--------- Vblank flag, cleared on read.
+            case 0x2002:
+                {
+                    // PPUSTATUS contains 3 flags so we assemble it from open bus + our flags
+                    value = open_bus & 0x1F;
+                    if (vblank_flag) value |= 0x80;
+                    if (sprite_zero_hit_flag) value |= 0x40;
+                    if (sprite_overflow_flag) value |= 0x20;
+
+                    // "Vblank flag, cleared on read."
+                    vblank_flag = false;
+
+                    // "Reading this register has the side effect of clearing the PPU's internal w register."
+                    w = false;
+                    break;
+                }
+            // from https://www.nesdev.org/wiki/PPU_registers#OAMDATA_-_Sprite_RAM_data_($2004_read/write)
+            // reads do not increment OAMADDR after reading
+            case 0x2004:
+                {
+                    value = oam[oam_address];
+                    break;
+                }
+            case 0x2007:
+                {
+                    value = cpu_read_ppudata();
+                    break;
+                }
+        default:
+                {
+                    value = open_bus;
+                    break;
+                }
+        }
+        open_bus = value;
+        return value;
     }
 
+    // from https://www.nesdev.org/wiki/PPU_registers#Summary
     void PPU::cpu_write_register(uint16_t address, uint8_t value)
     {
+        // always place last value written on data bus aka "latch open bus"
+        open_bus = value;
 
+        // address mirroring: CPU can write $2002 via $200A, $3FFA, ...
+        // mask address &= 0x2007.
+        switch (address & 0x2007)
+        {
+        case 0x2000:
+            {
+                break;
+            }
+        case 0x2001:
+            {
+                break;
+            }
+        case 0x2003:
+            {
+                break;
+            }
+            // from https://www.nesdev.org/wiki/PPU_registers#OAMDATA_-_Sprite_RAM_data_($2004_read/write)
+        case 0x2004:
+            {
+                oam[oam_address] =value;
+                break;
+            }
+        case 0x2005:
+            {
+                break;
+            }
+        case 0x2006:
+            {
+                break;
+            }
+        case 0x2007:
+            {
+                break;
+            }
+        default:
+            {
+                break;
+            }
+        }
     }
 
     // from https://www.nesdev.org/wiki/PPU_OAM#DMA
@@ -89,7 +185,7 @@ namespace nes {
     }
 
     // given a 14-bit address and a value, read it from the correct memory.
-    // teh address determines where we read from
+    // the address determines where we read from
     uint8_t PPU::ppu_bus_read(uint16_t address)
     {
         // clamp to 14-bitspace
@@ -195,9 +291,6 @@ namespace nes {
     // Memory address mirroring helper
     // Addresses  $3F10, $3F14, $3F18, and $3F1C are
     // mirrors of $3F00, $3F04, $3F08, and $3F0C respectively.
-    // The sprite palette entries at these addresses are unused because
-    // color 0 of each sprite palette is transparent, so these addresses
-    // instead access the background palette.
     // yields an index from 0..31 for accessing the palette table
     uint16_t PPU::mirror_palette_address(uint16_t address)
     {
@@ -211,9 +304,7 @@ namespace nes {
         if (address == 0x1C) i = 0x0C;
 
         return i;
-
     }
-
 
     void PPU::increment_v()
     {
