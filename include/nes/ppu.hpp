@@ -86,7 +86,7 @@ namespace nes
         SpritePipeline sprites;
         Scanline timing;
 
-        static void reset();
+        void reset();
         void step();
 
         // from https://www.nesdev.org/wiki/PPU_registers#Summary
@@ -100,8 +100,7 @@ namespace nes
         // void ppu_write(uint16_t address, uint8_t value);
 
         // CPU interface for $4014
-        void cpu_write_oamdma(uint8_t page);
-        void oamdma_execute(uint8_t* page_data); // CPU/bus operation so PPU can get data
+        void oam_dma_execute(const uint8_t* page_data); // CPU/bus operation so PPU can get data
 
         // PPU cannot directly access memory outside of its own space
         // so we get handed callback methods by the mapper or cartridge
@@ -196,6 +195,10 @@ namespace nes
         uint8_t palette_ram[32] = {}; // $3F00-$3F1F (with mirrors)
         uint8_t oam[256] = {}; // Primary OAM (64 sprites * 4 bytes)
 
+        // https://www.nesdev.org/wiki/CHR_ROM_vs_CHR_RAM
+        // Cartridge RAM $0000 - $1FFF
+        uint8_t chr_ram[0x2000] = {};
+
         // Non-Maskable Interrupt management
         bool nmi_pending = false; // signal to CPU: take NMI
         bool nmi_prev = false; // edge detect previous (vblank_flag && vblank_nmi_flag)
@@ -205,14 +208,16 @@ namespace nes
         bool frame_complete = false;
         const uint32_t* framebuffer_output() const;
 
+        // are we doing vertical or horizontal mirroring
+        bool vertical_mirroring = false;
+
+        // last value on CPU-PPU line
+        uint8_t open_bus = 0;
+
     private:
         // internal PPU bus routing with no CPU side effects
         uint8_t ppu_bus_read(uint16_t address);
         void ppu_bus_write(uint16_t address, uint8_t value);
-
-        // on oamdma_execute, internal PPU write into oam[(oam_address + i) & 0xFF] and
-        // increment oam_address
-        void oamdma_copy_256(const uint8_t* page_data);
 
         // $2007 helper methods
         uint8_t cpu_read_ppudata();
@@ -228,11 +233,6 @@ namespace nes
         // returns canonical address in $3F00-$3F1F after folding in address
         // and applying the sprint to background mirror quirk
         // from https://www.nesdev.org/wiki/PPU_palettes
-        // Addresses  $3F10, $3F14, $3F18, and $3F1C are
-        // mirrors of $3F00, $3F04, $3F08, and $3F0C respectively.
-        // The sprite palette entries at these addresses are unused because
-        // color 0 of each sprite palette is transparent, so these addresses
-        // instead access the background palette.
         uint16_t mirror_palette_address(uint16_t address);
 
         // fields for CHR ROM/RAM callbacks (pattern tables $0000-$1FFF)

@@ -1,6 +1,8 @@
 #include <iostream>
 #include <cassert>
 #include "../../include/nes/mem.hpp"
+#include "../../include/nes/ppu.hpp"
+#include "../../include/nes/apu.hpp"
 
 // A helper to print "PASS" in green
 void log_pass(const char* test_name) {
@@ -8,7 +10,9 @@ void log_pass(const char* test_name) {
 }
 
 void test_ram_functionality() {
-    nes::Memory mem;
+    nes::PPU ppu;
+    nes::APU apu;
+    nes::Memory mem(ppu, apu);
 
     // 1. Basic Read/Write
     mem.write(0x0000, 0x42);
@@ -30,7 +34,9 @@ void test_ram_functionality() {
 }
 
 void test_ppu_registers() {
-    nes::Memory mem;
+    nes::PPU ppu;
+    nes::APU apu;
+    nes::Memory mem(ppu, apu);
 
     // 1. Test Initial PPU Status ($2002)
     // Your constructor sets ppu_status = 0x80 (VBlank)
@@ -48,7 +54,9 @@ void test_ppu_registers() {
 }
 
 void test_bounds_safety() {
-    nes::Memory mem;
+    nes::PPU ppu;
+    nes::APU apu;
+    nes::Memory mem(ppu, apu);
 
     // Test Open Bus / Unmapped regions
     // $4020 is start of Cartridge space, but no cart loaded yet.
@@ -59,7 +67,9 @@ void test_bounds_safety() {
 }
 
 void test_controller_input() {
-    nes::Memory mem;
+    nes::PPU ppu;
+    nes::APU apu;
+    nes::Memory mem(ppu, apu);
 
     // 1. Simulate Player holding 'A' and 'Start' buttons
     // Standard NES Bit Order: Right Left Down Up Start Sel B A

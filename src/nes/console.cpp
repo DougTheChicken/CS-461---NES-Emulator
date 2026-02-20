@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstring>
 
+console::console() : rom(), ppu(), apu(), mem(ppu, apu), cpu()
+{ init(); }
 console::console() { 
     std::memset(framebuffer_data, 0, sizeof(framebuffer_data));
     init(); 

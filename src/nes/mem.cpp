@@ -1,17 +1,20 @@
 #include "nes/mem.hpp"
 #include <cstring>
 #include <cstdio>
+#include "nes/apu.hpp"
+#include "nes/ppu.hpp"
 
 namespace nes {
 
-Memory::Memory() {
+Memory::Memory(PPU& ppu_, APU& apu_) : ppu(ppu_), apu(apu_) {
     reset();
 }
 
 void Memory::reset() {
     std::memset(ram, 0, sizeof(ram));
-    std::memset(ppu_regs, 0, sizeof(ppu_regs));
-    std::memset(apu_regs, 0, sizeof(apu_regs));
+    //std::memset(ppu_regs, 0, sizeof(ppu_regs));
+    //std::memset(apu_regs, 0, sizeof(apu_regs));
+
     controller1 = controller2 = 0;
 	controller1_shift = controller2_shift = 0;
 	strobe = false;
@@ -37,7 +40,7 @@ uint8_t Memory::read(uint16_t addr) {
         if (r == 0x2002) {
             return 0x80;
         }
-        return ppu_regs[r & 0x7];
+        return ppu.cpu_read_register(r);
     }
 
     // $4000-$4017: APU and I/O
@@ -59,7 +62,7 @@ uint8_t Memory::read(uint16_t addr) {
             return ret;
         }
         if (addr == 0x4014) return oam_dma;
-        return apu_regs[addr - 0x4000];
+        if (addr == 0x4015) return apu.read_status();
     }
 
     // $8000-$FFFF: PRG ROM
@@ -86,8 +89,10 @@ void Memory::write(uint16_t addr, uint8_t value) {
 
     // $2000-$3FFF: PPU registers
     if (addr < 0x4000) {
-        uint16_t r = 0x2000 + (addr & 0x7);
-        ppu_regs[r & 0x7] = value;
+        //uint16_t r = 0x2000 + (addr & 0x7);
+        // ppu_regs[r & 0x7] = value;
+        // compute the register directly and write the value
+        ppu.cpu_write_register(0x2000 | (addr & 0x7), value);
         return;
     }
 
