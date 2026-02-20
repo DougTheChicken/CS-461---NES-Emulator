@@ -26,7 +26,8 @@ namespace nes
         bool is_end_of_scanline() const;
         bool is_start_of_scanline() const;
         bool is_frame_start() const;
-
+        bool is_bg_fetch_cycle() const;
+        bool is_sprite_fetch_cycle() const;
 
     private:
 

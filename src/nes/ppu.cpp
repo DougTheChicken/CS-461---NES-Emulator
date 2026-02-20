@@ -463,4 +463,11 @@ namespace nes {
     // https://www.nesdev.org/wiki/PPU_rendering#Cycles_321-336
     bool Scanline::is_prefetch_cycle()  const { return cycle_ >= 321 && cycle_ <= 336; };
     bool Scanline::is_end_of_scanline() const  { return cycle_ == 340; }
+
+    // sprite and bg fetch helpers to avoid collisions
+    bool Scanline::is_bg_fetch_cycle() const { return is_visible_cycle() || is_prefetch_cycle(); };
+
+    // https://www.nesdev.org/wiki/PPU_sprite_evaluation#Details
+    // https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png
+    bool Scanline::is_sprite_fetch_cycle() const { return cycle_ >= 257 && cycle_ <= 320; };
 }
