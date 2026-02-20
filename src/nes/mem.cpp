@@ -13,6 +13,8 @@ void Memory::reset() {
     std::memset(ppu_regs, 0, sizeof(ppu_regs));
     std::memset(apu_regs, 0, sizeof(apu_regs));
     controller1 = controller2 = 0;
+	controller1_shift = controller2_shift = 0;
+	strobe = false;
     oam_dma = 0;
     // prg pointer and size are left as-is; console will re-map on ROM load
 }
@@ -40,8 +42,22 @@ uint8_t Memory::read(uint16_t addr) {
 
     // $4000-$4017: APU and I/O
     if (addr < 0x4018) {
-        if (addr == 0x4016) return controller1;
-        if (addr == 0x4017) return controller2;
+        if (addr == 0x4016) {
+            // If strobe is high, continuously read the 'A' button state
+            if (strobe) return controller1 & 1;
+
+            // Otherwise, read bit 0 and shift right
+            uint8_t ret = controller1_shift & 1;
+            controller1_shift >>= 1;
+            return ret;
+        }
+        if (addr == 0x4017) {
+            if (strobe) return controller2 & 1;
+
+            uint8_t ret = controller2_shift & 1;
+            controller2_shift >>= 1;
+            return ret;
+        }
         if (addr == 0x4014) return oam_dma;
         return apu_regs[addr - 0x4000];
     }
@@ -78,8 +94,25 @@ void Memory::write(uint16_t addr, uint8_t value) {
     // $4000-$4017: APU and I/O
     if (addr < 0x4018) {
         if (addr == 0x4014) { oam_dma = value; return; }
-        if (addr == 0x4016) { controller1 = value; return; }
-        if (addr == 0x4017) { controller2 = value; return; }
+
+        // Writing to 0x4016 controls the strobe latch for BOTH controllers
+        if (addr == 0x4016) {
+            strobe = (value & 1);
+            if (strobe) {
+                // While strobe is high, copy physical state into shift registers
+                controller1_shift = controller1;
+                controller2_shift = controller2;
+            }
+            return;
+        }
+
+        // Note: Writing to 0x4017 does NOT affect the controllers on the NES. 
+        // It is strictly for the APU frame counter.
+        if (addr == 0x4017) {
+            apu_regs[addr - 0x4000] = value;
+            return;
+        }
+
         apu_regs[addr - 0x4000] = value;
         return;
     }
