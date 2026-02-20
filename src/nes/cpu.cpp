@@ -5,6 +5,8 @@
 
 namespace nes {
 
+// NOTE: Ideally this should be a CPU member (not file-static), but leaving it here
+// to minimize changes outside this file.
 static cycle_t next_cpu_tick_ppu = 0;
 
 CPU::CPU() {
@@ -53,13 +55,15 @@ void CPU::reset() {
 
 void CPU::step_to(cycle_t ppu_target) {
     while (next_cpu_tick_ppu < ppu_target) {
-        step();
-        next_cpu_tick_ppu += CPU_TO_PPU;
+        int cpu_cycles = step();
+        next_cpu_tick_ppu += static_cast<cycle_t>(cpu_cycles) * CPU_TO_PPU;
     }
 }
 
-void CPU::step() {
-    if (!mem) return;
+int CPU::step() {
+    if (!mem) return 0;
+
+    int cycles_before = cycles_until_cpu_boundary;
 
     uint16_t pc_before = PC;
     uint8_t opcode = fetch8();
@@ -220,10 +224,15 @@ void CPU::step() {
                          (unsigned)S);
             std::abort();
     }
+    // cycles consumed by THIS instruction
+    return cycles_until_cpu_boundary - cycles_before;
 }
 
-std::string CPU::lookupInstruction(int) {
-    return "???";
+    std::string CPU::lookupInstruction(int opcode) {
+    switch (opcode & 0xFF) {
+        case 0x01: return "ORA"; // ORA (indirect,X)
+        default:   return "???";
+    }
 }
 
 } // namespace nes

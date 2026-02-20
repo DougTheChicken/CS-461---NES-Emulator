@@ -1,9 +1,14 @@
 #include "nes/console.hpp"
 #include <cstdio>
-#include <cstddef>
 #include <cstring>
+#include <cstddef>
 
-console::console() : rom(), ppu(), apu(), mem(ppu, apu), cpu()
+console::console()
+    : rom(),
+      ppu(),
+      apu(),
+      mem(ppu, apu),
+      cpu()
 {
     std::memset(framebuffer_data, 0, sizeof(framebuffer_data));
     init();
@@ -46,18 +51,18 @@ bool console::load_rom(char* filepath) {
 
 void console::run_rom() {
     for (int i = 0; i < 200000; ++i) {
-        cpu.step_to(master_cycle_count + 3);
-        master_cycle_count += 3;
+        step_instruction();
 
         if ((i % 5000) == 0) {
             std::fprintf(stderr,
-                "RUN i=%d  PC=%04X A=%02X X=%02X Y=%02X P=%02X\n",
+                "RUN i=%d  PC=%04X A=%02X X=%02X Y=%02X P=%02X  cpu_cycles=%llu\n",
                 i,
                 (unsigned)cpu.pc(),
                 (unsigned)cpu.a(),
                 (unsigned)cpu.x(),
                 (unsigned)cpu.y(),
-                (unsigned)cpu.p()
+                (unsigned)cpu.p(),
+                get_cpu_cycles()
             );
         }
     }
@@ -69,8 +74,30 @@ void console::step(cycle_t stepcount) {
     update_framebuffer();
 }
 
+unsigned long long console::get_cpu_cycles() const {
+    return master_cycle_count / CPU_TO_PPU;
+}
+
+void console::step_cpu_cycles(unsigned long long cpu_cycles) {
+    step(static_cast<cycle_t>(cpu_cycles * CPU_TO_PPU));
+}
+
+int console::step_instruction() {
+    int used_cpu_cycles = cpu.step();
+    if (used_cpu_cycles < 0) used_cpu_cycles = 0;
+
+    master_cycle_count +=
+        static_cast<unsigned long long>(used_cpu_cycles) * CPU_TO_PPU;
+
+    update_framebuffer();
+    return used_cpu_cycles;
+}
+
 void console::init() {
     master_cycle_count = 0;
+
+    cpu.attach_memory(&mem);
+    cpu.reset();
 }
 
 void console::reset_all() {
@@ -79,6 +106,10 @@ void console::reset_all() {
     rom.reset();
     mem.reset();
     std::fprintf(stderr, "[console] Reset complete\n");
+}
+
+const uint32_t* console::framebuffer() const {
+    return framebuffer_data;
 }
 
 void console::update_framebuffer() {
