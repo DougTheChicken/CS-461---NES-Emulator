@@ -393,4 +393,42 @@ namespace nes {
 
     const uint32_t* PPU::framebuffer_output() const { return framebuffer; };
 
+    bool PPU::rendering_enabled() const { return sprite_rendering_flag || background_rendering_flag; }
+
+    // ============================================================================
+    // Scanline
+    // ============================================================================
+
+    void Scanline::reset() {
+        ; // TODO: whatnot
+    }
+
+    // https://www.nesdev.org/wiki/PPU_frame_timing#Even/Odd_Frames
+    void Scanline::tick() {
+        // on prerender scanline cycle jump from 339,261 to 0,0
+        if (scanline_ == -1 && cycle_ == 339 && odd_frame_ && ppu.rendering_enabled()) {
+            cycle_ = 0;
+            scanline_ = 0;
+            odd_frame_ = false;
+            return;
+        }
+
+        // PPU advances in PPU clock cycles (often called dots) through each scanline
+        cycle_++;
+        // each scanline lasts for 341 PPU clock cycles
+        if (cycle_ > 340) {
+            // after the last cycle of a scanline, the next scanline begins at cycle 0
+            cycle_ = 0;
+            // PPU renders 262 scanlines per frame; scanline counter advances each scanline.
+            scanline_++;
+
+            // Visible scanlines are 0-239; vblank scanlines are 241-260; pre-render is -1 (aka 261)
+            if (scanline_ > 260) {
+                // next is the pre-render scanline
+                scanline_= -1;
+                // PPU has an even/odd flag toggled every frame, regardless of rendering enabled/disabled.
+                odd_frame_= !odd_frame_;
+            }
+        }
+    }
 }
