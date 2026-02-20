@@ -102,9 +102,11 @@ void Memory::write(uint16_t addr, uint8_t value) {
 
         // Writing to 0x4016 controls the strobe latch for BOTH controllers
         if (addr == 0x4016) {
-            strobe = (value & 1);
-            if (strobe) {
-                // While strobe is high, copy physical state into shift registers
+            bool prev = strobe;
+            strobe = (value & 1) != 0;
+
+            // Latch controller state when strobe is high OR on falling edge (1 -> 0)
+            if (strobe || (prev && !strobe)) {
                 controller1_shift = controller1;
                 controller2_shift = controller2;
             }
