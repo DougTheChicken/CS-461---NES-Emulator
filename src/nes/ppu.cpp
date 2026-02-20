@@ -403,6 +403,7 @@ namespace nes {
         odd_frame_ = false;
         scanline_ = -1;
         cycle_ = 0;
+        frame_count_ = 0;
     }
 
     // https://www.nesdev.org/wiki/PPU_frame_timing#Even/Odd_Frames
@@ -430,6 +431,7 @@ namespace nes {
                 scanline_= -1;
                 // PPU has an even/odd flag toggled every frame, regardless of rendering enabled/disabled.
                 odd_frame_= !odd_frame_;
+                frame_count_++;
             }
         }
     }
@@ -437,6 +439,7 @@ namespace nes {
     bool Scanline::odd_frame() const { return odd_frame_; };
     int16_t Scanline::scanline() const { return scanline_; };
     uint16_t Scanline::cycle() const { return cycle_; };
+    uint32_t Scanline::frame_count() const { return frame_count_; };
 
     // https://www.nesdev.org/wiki/PPU_rendering#Vertical_blanking_lines_(241-260)
     bool Scanline::is_vblank_start() const { return scanline_ == 241 && cycle_ == 1; };
@@ -448,10 +451,16 @@ namespace nes {
     // https://www.nesdev.org/wiki/PPU_rendering#Visible_scanlines_(0-239)
     bool Scanline::is_visible_scanline() const { return scanline_ >= 0 && scanline_ <= 239; };
     bool Scanline::is_render_scanline() const { return is_prerender_scanline() || is_visible_scanline(); };
+    bool Scanline::is_postrender_scanline() const  { return scanline_ == 240 ;}
+
+    // https://www.nesdev.org/wiki/PPU_rendering#Cycle_0
+    bool Scanline::is_start_of_scanline() const { return cycle_ == 0; };
+    bool Scanline::is_frame_start() const { return is_prerender_scanline() && is_start_of_scanline(); };
 
     // https://www.nesdev.org/wiki/PPU_rendering#Cycles_1-256
     bool Scanline::is_visible_cycle() const { return cycle_ >=1 && cycle_ <= 256; };
 
     // https://www.nesdev.org/wiki/PPU_rendering#Cycles_321-336
     bool Scanline::is_prefetch_cycle()  const { return cycle_ >= 321 && cycle_ <= 336; };
+    bool Scanline::is_end_of_scanline() const  { return cycle_ == 340; }
 }

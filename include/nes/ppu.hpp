@@ -14,14 +14,18 @@ namespace nes
         bool odd_frame() const;
         int16_t scanline() const;
         uint16_t cycle() const;
+        uint32_t frame_count() const;
         bool is_vblank_start() const;
         bool is_vblank_end() const;
         bool is_prerender_scanline() const;
+        bool is_postrender_scanline() const;
         bool is_visible_scanline() const;
         bool is_render_scanline() const;
         bool is_visible_cycle() const;
         bool is_prefetch_cycle() const;
-
+        bool is_end_of_scanline() const;
+        bool is_start_of_scanline() const;
+        bool is_frame_start() const;
 
 
     private:
@@ -35,6 +39,9 @@ namespace nes
 
         // 0 - 340 (https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png)
         uint16_t cycle_ = 0;
+
+        // frame counter for fun
+        uint32_t frame_count_ = 0;
 
 
     }; // end class Scanline
