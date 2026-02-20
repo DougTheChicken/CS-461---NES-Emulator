@@ -11,6 +11,11 @@ namespace nes {
     void PPU::reset()
     {
         oam_address = 0;
+        // TODO: more to do here
+    }
+
+    void PPU::step() {
+        // TODO: More to do here
     }
 
     // https://www.nesdev.org/wiki/PPU_registers#PPUDATA_-_VRAM_data_($2007_read/write)
