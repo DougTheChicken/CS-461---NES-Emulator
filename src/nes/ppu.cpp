@@ -6,7 +6,7 @@ namespace nes {
     // PPU
     // ============================================================================
 
-    PPU::PPU() : bg(*this), sprites(*this), timing(*this) { reset(); }
+    PPU::PPU() : bg(*this), sprites(*this), timing() { reset(); }
 
     void PPU::reset()
     {
@@ -400,16 +400,18 @@ namespace nes {
     // ============================================================================
 
     void Scanline::reset() {
-        ; // TODO: whatnot
+        odd_frame_ = false;
+        scanline_ = -1;
+        cycle_ = 0;
     }
 
     // https://www.nesdev.org/wiki/PPU_frame_timing#Even/Odd_Frames
-    void Scanline::tick() {
+    void Scanline::tick(const bool rendering_enabled) {
         // on prerender scanline cycle jump from 339,261 to 0,0
-        if (scanline_ == -1 && cycle_ == 339 && odd_frame_ && ppu.rendering_enabled()) {
+        if (scanline_ == -1 && cycle_ == 339 && odd_frame_ && rendering_enabled) {
             cycle_ = 0;
             scanline_ = 0;
-            odd_frame_ = false;
+            // odd_frame_ = false; TODO: delete this?
             return;
         }
 
@@ -431,4 +433,25 @@ namespace nes {
             }
         }
     }
+
+    bool Scanline::odd_frame() const { return odd_frame_; };
+    int16_t Scanline::scanline() const { return scanline_; };
+    uint16_t Scanline::cycle() const { return cycle_; };
+
+    // https://www.nesdev.org/wiki/PPU_rendering#Vertical_blanking_lines_(241-260)
+    bool Scanline::is_vblank_start() const { return scanline_ == 241 && cycle_ == 1; };
+    bool Scanline::is_vblank_end() const { return is_prerender_scanline() && cycle_ == 1; };
+
+    // https://www.nesdev.org/wiki/PPU_rendering#Pre-render_scanline_(-1_or_261)
+    bool Scanline::is_prerender_scanline() const { return scanline_ == -1; };
+
+    // https://www.nesdev.org/wiki/PPU_rendering#Visible_scanlines_(0-239)
+    bool Scanline::is_visible_scanline() const { return scanline_ >= 0 && scanline_ <= 239; };
+    bool Scanline::is_render_scanline() const { return is_prerender_scanline() || is_visible_scanline(); };
+
+    // https://www.nesdev.org/wiki/PPU_rendering#Cycles_1-256
+    bool Scanline::is_visible_cycle() const { return cycle_ >=1 && cycle_ <= 256; };
+
+    // https://www.nesdev.org/wiki/PPU_rendering#Cycles_321-336
+    bool Scanline::is_prefetch_cycle()  const { return cycle_ >= 321 && cycle_ <= 336; };
 }

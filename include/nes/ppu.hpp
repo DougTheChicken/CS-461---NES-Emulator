@@ -8,21 +8,23 @@ namespace nes
     class Scanline
     {
     public:
-        explicit Scanline(PPU& ppu) : ppu(ppu)
-        {
-        }
-        // TODO: define Scanline public and private methods
 
         void reset();
-        void tick();
-        bool odd_frame() const {return odd_frame_; }
-        int16_t scanline() const { return scanline_; }
-        uint16_t cycle() const { return cycle_; }
+        void tick(bool rendering_enabled);
+        bool odd_frame() const;
+        int16_t scanline() const;
+        uint16_t cycle() const;
+        bool is_vblank_start() const;
+        bool is_vblank_end() const;
+        bool is_prerender_scanline() const;
+        bool is_visible_scanline() const;
+        bool is_render_scanline() const;
+        bool is_visible_cycle() const;
+        bool is_prefetch_cycle() const;
 
 
 
     private:
-        PPU& ppu;
 
         // from https://www.nesdev.org/wiki/PPU_rendering#Line-by-line_timing
         // For odd frames, the cycle at the end of the scanline is skipped
