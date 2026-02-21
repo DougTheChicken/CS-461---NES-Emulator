@@ -15,7 +15,35 @@ namespace nes {
     }
 
     void PPU::step() {
-        // TODO: More to do here
+
+        // TODO: background scanlines and cylcles
+
+        // scanlines 0-239
+        if (timing.is_visible_scanline())
+        {
+            // https://www.nesdev.org/wiki/PPU_sprite_evaluation
+            // Each scanline, the PPU reads the spritelist (that is, Object Attribute Memory) to see which to draw
+            if (timing.is_start_of_scanline())
+            {
+                sprites.begin_scanline(timing.scanline());
+            }
+            // 64 bytes of secondary OAM cleared
+            else if (timing.is_sprite_clear_cycle())
+            {
+                // First, it clears the list of sprites to draw in secondary oam, 1 byte at time
+                sprites.clear(timing.cycle());
+            }
+            else if (timing.is_sprite_evaluation_cycle())
+            {
+                // Second, it reads through OAM, checking which sprites will be on this scanline.
+                // It chooses the first eight it finds that do.
+                sprites.evaluate(timing.scanline(), timing.cycle());
+            }
+            else if (timing.is_sprite_fetch_cycle())
+            {
+                sprites.fetch(timing.scanline(), timing.cycle());
+            }
+        }
     }
 
     // https://www.nesdev.org/wiki/PPU_registers#PPUDATA_-_VRAM_data_($2007_read/write)
@@ -469,5 +497,94 @@ namespace nes {
 
     // https://www.nesdev.org/wiki/PPU_sprite_evaluation#Details
     // https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png
+    bool Scanline::is_sprite_clear_cycle() const { return cycle_ >=1 && cycle_ <= 64; };
+    bool Scanline::is_sprite_evaluation_cycle() const { return cycle_ >= 65 && cycle_ <= 256; };
     bool Scanline::is_sprite_fetch_cycle() const { return cycle_ >= 257 && cycle_ <= 320; };
+
+    // ============================================================================
+    // SpritePipeline
+    // ============================================================================
+
+    // clear 1 byte of secondary oam
+    void SpritePipeline::clear(int cycle)
+    {
+        // clearing secondary oam with 0xFF means they never match the
+        // scanline by accident
+        secondary_oam[cycle - 1] = 0xFF;
+    }
+
+    // Does this sprite intersect this scanline?
+    bool SpritePipeline::intersects(int scanline, uint8_t top)
+    {
+        int sprite_height = ppu.sprite_size_flag ? 16 : 8;
+        return (scanline >= top) && (scanline < top + sprite_height);
+    }
+
+    // there are 64 sprites, each is 4-bytes: x, tile, attr, y
+    // we need to walk each one and see if it is interesected by this scanline
+    // and then copy the hits into our secondary oam, tra
+    void SpritePipeline::evaluate(int scanline, int cycle)
+    {
+        // if we already scanned all sprites, we are done
+        if (oam_scan_index >= 64) return;
+
+        int base = oam_scan_index * 4;
+
+        // extract fields
+        uint8_t y = ppu.oam[base];
+        uint8_t tile = ppu.oam[base + 1];
+        uint8_t attr = ppu.oam[base + 2];
+        uint8_t x = ppu.oam[base + 3];
+
+        if (intersects(scanline, y))
+        {
+            // got a hit but we only handle up to 8 sprites per scanline
+            if (secondary_count < 8)
+            {
+                // secondary oam is 256 bytes of 64 sprites x 4 bytes each,
+                // get our starting offeset from sprite #
+                int dest = secondary_count * 4;
+
+                // store our hit sprite in secondary oam so we can draw it later
+                secondary_oam[dest] = y;
+                secondary_oam[dest + 1] = tile;
+                secondary_oam[dest + 2] = attr;
+                secondary_oam[dest + 3] = x;
+
+                // store state for fetch and draw
+                spr_x[secondary_count] = x; // x counter to avoid oam until needed
+                spr_attr[secondary_count] = attr; // palette, front/back, reversed
+
+                // sprite 0 hit detection, take low 8 bits of sprite index (0..7). we check for sprite 0 during draw.
+                spr_oam_index[secondary_count] = static_cast<uint8_t>(oam_scan_index);
+
+                secondary_count++;
+            }
+            else
+            {
+                // more than 8 sprites, so declare an overflow
+                overflow_ = true;
+            }
+        }
+        oam_scan_index++;
+    }
+
+    void SpritePipeline::fetch(int scanline, int cycle) {}
+
+    // reset everything and take it from the top
+    void SpritePipeline::begin_scanline(int scanline)
+    {
+        // # of sprites in secondary oam
+        secondary_count = 0;
+
+        // primary oam selector
+        oam_scan_index = 0;
+
+        // whether we exceed 8 sprites on the current scanline
+        overflow_ = false;
+    }
+
+    bool SpritePipeline::overflow() const { return overflow_; }
+
+
 }

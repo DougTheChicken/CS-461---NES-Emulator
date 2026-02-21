@@ -28,6 +28,8 @@ namespace nes
         bool is_frame_start() const;
         bool is_bg_fetch_cycle() const;
         bool is_sprite_fetch_cycle() const;
+        bool is_sprite_clear_cycle() const;
+        bool is_sprite_evaluation_cycle() const;
 
     private:
 
@@ -75,7 +77,15 @@ namespace nes
         explicit SpritePipeline(PPU& ppu) : ppu(ppu)
         {
         }
-        // TODO: define SpritePipeline public and private methods
+
+        void clear(int cycle);
+        bool intersects(int scanline, uint8_t y);
+        void evaluate(int scanline, int cycle);
+        void fetch(int scanline, int cycle);
+        void begin_scanline(int scanline);
+        bool overflow() const;
+
+
 
     private:
         PPU& ppu;
@@ -92,11 +102,17 @@ namespace nes
         uint8_t spr_shift_low[8]{}, spr_shift_high[8]{};
         uint8_t spr_x[8]{}, spr_attr[8]{};
         uint8_t spr_oam_index[8]{};
-        int sprite_count = 0;
 
         // secondary OAM working set for the current scanline
         uint8_t secondary_oam[32] = {}; // 8 sprites * 4 bytes
-        int secondary_count = 0;
+        int secondary_count = 0; // # of sprites in secondary oam
+
+        // need a way to index the OAM sprites, incremented each evaluation step, 0-63
+        // "which primary OAM sprite is being tested against this scanline"
+        int oam_scan_index = 0;
+
+
+        bool overflow_ = false;
     }; // end class SpritePipeline
 
     class PPU
