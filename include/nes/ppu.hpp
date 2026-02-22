@@ -8,19 +8,43 @@ namespace nes
     class Scanline
     {
     public:
-        explicit Scanline(PPU& ppu) : ppu(ppu)
-        {
-        }
-        // TODO: define Scanline public and private methods
 
-        // from https://www.nesdev.org/wiki/PPU_rendering?utm_source=chatgpt.com#Line-by-line_timing
-        // line-by-line timing
-        bool odd_frame = false; // For odd frames, the cycle at the end of the scanline is skipped
-        int16_t scanline = -1; // -1 prerender, 0-239 render, 240 post-render; 241-260 vblank
-        uint16_t cycle = 0; // 0 - 340 (https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png)
+        void reset();
+        void tick(bool rendering_enabled);
+        bool odd_frame() const;
+        int16_t scanline() const;
+        uint16_t cycle() const;
+        uint32_t frame_count() const;
+        bool is_vblank_start() const;
+        bool is_vblank_end() const;
+        bool is_prerender_scanline() const;
+        bool is_postrender_scanline() const;
+        bool is_visible_scanline() const;
+        bool is_render_scanline() const;
+        bool is_visible_cycle() const;
+        bool is_prefetch_cycle() const;
+        bool is_end_of_scanline() const;
+        bool is_start_of_scanline() const;
+        bool is_frame_start() const;
+        bool is_bg_fetch_cycle() const;
+        bool is_sprite_fetch_cycle() const;
 
     private:
-        PPU& ppu;
+
+        // from https://www.nesdev.org/wiki/PPU_rendering#Line-by-line_timing
+        // For odd frames, the cycle at the end of the scanline is skipped
+        bool odd_frame_ = false;
+
+        // -1 prerender, 0-239 render, 240 post-render; 241-260 vblank
+        int16_t scanline_ = -1;
+
+        // 0 - 340 (https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png)
+        uint16_t cycle_ = 0;
+
+        // frame counter for fun
+        uint32_t frame_count_ = 0;
+
+
     }; // end class Scanline
 
     class BackgroundPipeline
@@ -108,7 +132,8 @@ namespace nes
         void set_chr_read_callback(uint8_t (*callback)(uint16_t));
         void set_chr_write_callback(void (*callback)(uint16_t, uint8_t));
 
-
+        // helper to tell Scanline, BackgroundPipeline and SpritePipeline when one of the rendering flags is set
+        bool rendering_enabled() const;
 
         // $2000 values
         uint8_t base_nametable_select = 0; // nametable x and y

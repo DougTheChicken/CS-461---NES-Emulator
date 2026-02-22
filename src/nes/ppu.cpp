@@ -6,7 +6,7 @@ namespace nes {
     // PPU
     // ============================================================================
 
-    PPU::PPU() : bg(*this), sprites(*this), timing(*this) { reset(); }
+    PPU::PPU() : bg(*this), sprites(*this), timing() { reset(); }
 
     void PPU::reset()
     {
@@ -393,4 +393,81 @@ namespace nes {
 
     const uint32_t* PPU::framebuffer_output() const { return framebuffer; };
 
+    bool PPU::rendering_enabled() const { return sprite_rendering_flag || background_rendering_flag; }
+
+    // ============================================================================
+    // Scanline
+    // ============================================================================
+
+    void Scanline::reset() {
+        odd_frame_ = false;
+        scanline_ = -1;
+        cycle_ = 0;
+        frame_count_ = 0;
+    }
+
+    // https://www.nesdev.org/wiki/PPU_frame_timing#Even/Odd_Frames
+    void Scanline::tick(const bool rendering_enabled) {
+        // on prerender scanline cycle jump from 339,261 to 0,0
+        if (scanline_ == -1 && cycle_ == 339 && odd_frame_ && rendering_enabled) {
+            cycle_ = 0;
+            scanline_ = 0;
+            // odd_frame_ = false; TODO: delete this?
+            return;
+        }
+
+        // PPU advances in PPU clock cycles (often called dots) through each scanline
+        cycle_++;
+        // each scanline lasts for 341 PPU clock cycles
+        if (cycle_ > 340) {
+            // after the last cycle of a scanline, the next scanline begins at cycle 0
+            cycle_ = 0;
+            // PPU renders 262 scanlines per frame; scanline counter advances each scanline.
+            scanline_++;
+
+            // Visible scanlines are 0-239; vblank scanlines are 241-260; pre-render is -1 (aka 261)
+            if (scanline_ > 260) {
+                // next is the pre-render scanline
+                scanline_= -1;
+                // PPU has an even/odd flag toggled every frame, regardless of rendering enabled/disabled.
+                odd_frame_= !odd_frame_;
+                frame_count_++;
+            }
+        }
+    }
+
+    bool Scanline::odd_frame() const { return odd_frame_; };
+    int16_t Scanline::scanline() const { return scanline_; };
+    uint16_t Scanline::cycle() const { return cycle_; };
+    uint32_t Scanline::frame_count() const { return frame_count_; };
+
+    // https://www.nesdev.org/wiki/PPU_rendering#Vertical_blanking_lines_(241-260)
+    bool Scanline::is_vblank_start() const { return scanline_ == 241 && cycle_ == 1; };
+    bool Scanline::is_vblank_end() const { return is_prerender_scanline() && cycle_ == 1; };
+
+    // https://www.nesdev.org/wiki/PPU_rendering#Pre-render_scanline_(-1_or_261)
+    bool Scanline::is_prerender_scanline() const { return scanline_ == -1; };
+
+    // https://www.nesdev.org/wiki/PPU_rendering#Visible_scanlines_(0-239)
+    bool Scanline::is_visible_scanline() const { return scanline_ >= 0 && scanline_ <= 239; };
+    bool Scanline::is_render_scanline() const { return is_prerender_scanline() || is_visible_scanline(); };
+    bool Scanline::is_postrender_scanline() const  { return scanline_ == 240 ;}
+
+    // https://www.nesdev.org/wiki/PPU_rendering#Cycle_0
+    bool Scanline::is_start_of_scanline() const { return cycle_ == 0; };
+    bool Scanline::is_frame_start() const { return is_prerender_scanline() && is_start_of_scanline(); };
+
+    // https://www.nesdev.org/wiki/PPU_rendering#Cycles_1-256
+    bool Scanline::is_visible_cycle() const { return cycle_ >=1 && cycle_ <= 256; };
+
+    // https://www.nesdev.org/wiki/PPU_rendering#Cycles_321-336
+    bool Scanline::is_prefetch_cycle()  const { return cycle_ >= 321 && cycle_ <= 336; };
+    bool Scanline::is_end_of_scanline() const  { return cycle_ == 340; }
+
+    // sprite and bg fetch helpers to avoid collisions
+    bool Scanline::is_bg_fetch_cycle() const { return is_visible_cycle() || is_prefetch_cycle(); };
+
+    // https://www.nesdev.org/wiki/PPU_sprite_evaluation#Details
+    // https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png
+    bool Scanline::is_sprite_fetch_cycle() const { return cycle_ >= 257 && cycle_ <= 320; };
 }
