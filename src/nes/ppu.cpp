@@ -44,6 +44,9 @@ namespace nes {
                 sprites.fetch(timing.scanline(), timing.cycle());
             }
         }
+
+        // tick once per PPU cycle
+        timing.tick(rendering_enabled());
     }
 
     // https://www.nesdev.org/wiki/PPU_registers#PPUDATA_-_VRAM_data_($2007_read/write)
@@ -401,14 +404,15 @@ namespace nes {
     // yields an index from 0..31 for accessing the palette table
     uint16_t PPU::mirror_palette_address(uint16_t address)
     {
-        // $3F10 becomes 0x10, etc
+        // 14-bits of address space in palette addresses
         address &= 0x3FFF;
 
-        uint8_t i = 0;
-        if (address == 0x10) i = 0x00;
-        if (address == 0x14) i = 0x04;
-        if (address == 0x18) i = 0x08;
-        if (address == 0x1C) i = 0x0C;
+        // mirrors $3F20-$3FFF down to $3F00-$3F1F, $3F10 becomes 0x10, etc
+        uint8_t i = address & 0X001F;
+        if (i == 0x10) i = 0x00;
+        if (i == 0x14) i = 0x04;
+        if (i == 0x18) i = 0x08;
+        if (i == 0x1C) i = 0x0C;
 
         return i;
     }
