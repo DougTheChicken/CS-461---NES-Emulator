@@ -569,7 +569,120 @@ namespace nes {
         oam_scan_index++;
     }
 
-    void SpritePipeline::fetch(int scanline, int cycle) {}
+    // Cycles 257-320: Sprite fetches (8 sprites total, 8 cycles per sprite)
+    void SpritePipeline::fetch(int scanline, int cycle)
+    {
+        // once per scanline
+        if (cycle == 257) { clear_unused_shifters(); }
+
+        // 8 sprites
+        uint8_t sprite_index = (cycle - 257) / 8;
+
+        // 8 cycles per sprite
+        uint8_t phase = (cycle - 257) % 8;
+
+        // can't go over the max
+        if (sprite_index >= secondary_count) { return; }
+
+        // extract sprite fields
+        int base = sprite_index * 4;
+        uint8_t y = secondary_oam[base];
+        uint8_t tile = secondary_oam[base + 1];
+        uint8_t attr = secondary_oam[base + 2];
+        uint8_t x = secondary_oam[base + 3];
+
+        // from https://www.nesdev.org/wiki/PPU_rendering#Cycles_257-320
+        // The tile data for the sprites on the next scanline are fetched here.
+        // Again, each memory access takes 2 PPU cycles to complete,
+        // and 4 are performed for each of the 8 sprites:
+        // 0 Garbage nametable byte but we store state for drawing and get our pattern table address
+        // 2 Garbage nametable byte
+        // 4 Pattern table tile low
+        // 6 Pattern table tile high (8 bytes above pattern table tile low address)
+        if (phase == 0)
+        {
+            // store state for draw
+            spr_x[secondary_count] = x; // x counter to avoid oam until needed
+            spr_attr[secondary_count] = attr; // palette, front/back, reversed
+
+            // latch pattern address for this sprite
+            spr_pattern_addr[sprite_index] = compute_pattern_address(scanline, y, tile, attr);
+        }
+        else if (phase == 4)
+        {
+            spr_shift_low[sprite_index] =
+                maybe_flipped_h(attr, ppu.ppu_bus_read(spr_pattern_addr[sprite_index]));
+        }
+        else if (phase == 6)
+        {
+            spr_shift_high[sprite_index] =
+                maybe_flipped_h(attr, ppu.ppu_bus_read(spr_pattern_addr[sprite_index] + 8));
+        }
+    }
+
+    // Returns the pattern address for the low byte of the sprite pattern row, so add 8 bytes to result to get the high
+    uint16_t SpritePipeline::compute_pattern_address(
+        int scanline,
+        uint8_t y,
+        uint8_t tile,
+        uint8_t attr
+    )
+    {
+        const int sprite_height = ppu.sprite_size_flag ? 16 : 8;
+
+        // fine_y = scanline offset within the sprite
+        // 0..7 for 8x8 or 0..15 for 8x16
+        int fine_y = scanline - y;
+
+        // Vertical flip? (attr bit 7)
+        if (attr & 0x80)
+            fine_y = (sprite_height - 1) - fine_y;  // takes a fine_y of 0 1 2 3 4 ... and turns it into ... 4 3 2 1 0
+
+        if (!ppu.sprite_size_flag) // 8x16 when set
+        {
+            // from https://www.nesdev.org/wiki/PPU_programmer_reference#PPUCTRL_-_Miscellaneous_settings_($2000_write)
+            // in 8x8, sprite_pattern_table_address_flag (0: $0000; 1: $1000; ignored in 8x16 mode)
+            uint16_t table_base = ppu.sprite_pattern_table_address_flag ? 0x1000 : 0x0000;
+
+            // 4kb base + (each tile is 16 bytes) + row into the sprite = btye address into pattern table for the row
+            return table_base + (tile * 16) + fine_y;
+        }
+
+        // from https://www.nesdev.org/wiki/PPU_programmer_reference#Byte_1_-_Tile/index
+        // "For 8x16 sprites (bit 5 of PPUCTRL set), the PPU ignores the pattern table selection and
+        // selects a pattern table from bit 0 of this number.
+        // Bits 7-0: Tile number of top of sprite (0 to 254; bottom half gets the next tile)"
+        uint16_t table_base = (tile & 0x01) ? 0x1000 : 0x0000;
+
+        // valid top indexes are even, so first force an even index from the tile to make next step easy
+        uint8_t tile_index = tile & 0xFE;
+
+        // for our given line, with 16 lines of y, we stay here on 0..7 and move up 1 on 8-15
+        uint8_t tile_for_row = (fine_y < 8) ? tile_index : (tile_index + 1);
+
+        // 4kb base + (each tile is 16 bytes) + (our row is the low 3 bits of fine y from either high/low sprite we had)
+        return table_base + ((tile_for_row) * 16) + (fine_y & 0x07);
+    }
+
+    // horizontally flip the byte if attr says so
+    uint8_t SpritePipeline::maybe_flipped_h(const uint8_t attributes, const uint8_t byte)
+    {
+        // attr holds "flip horizontal" and if so, we use a lookup table to reverse the bits
+        if ((attributes & 0x40) != 0) { return reverse_table[byte]; }
+        return byte;
+    }
+
+    // returns true if attr
+    bool SpritePipeline::flip_vertical(const uint8_t attributes) { return (attributes & 0x80) != 0; }
+
+    void SpritePipeline::clear_unused_shifters()
+    {
+        for (int i = secondary_count; i < 8; i++)
+        {
+            spr_shift_low[i] = 0;
+            spr_shift_high[i] = 0;
+        }
+    }
 
     // reset everything and take it from the top
     void SpritePipeline::begin_scanline(int scanline)
