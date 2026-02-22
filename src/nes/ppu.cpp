@@ -16,7 +16,25 @@ namespace nes {
 
     void PPU::step() {
 
-        // TODO: background scanlines and cylcles
+        // TODO: background scanlines and cycles
+
+        // vblank flag: set at scanline 241 cycle 1, cleared at pre-render cycle1
+        if (timing.is_vblank_start())
+        {
+            vblank_flag = true;
+            // post an interrupt to the cpu if vblank nmi is set
+            if (vblank_nmi_flag) { nmi_pending = true; }
+        }
+
+        // vblank is over. pencils down. i hope you finished all your work.
+        if (timing.is_vblank_end())
+        {
+            // clean up for render time
+            vblank_flag = false;
+            nmi_pending = false;
+            sprite_zero_hit_flag = false;
+            sprite_overflow_flag = false;
+        }
 
         // scanlines 0-239
         if (timing.is_visible_scanline())
