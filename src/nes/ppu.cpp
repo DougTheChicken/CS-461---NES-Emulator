@@ -15,7 +15,56 @@ namespace nes {
     }
 
     void PPU::step() {
-        // TODO: More to do here
+
+        // TODO: background scanlines and cycles
+
+        // vblank flag: set at scanline 241 cycle 1, cleared at pre-render cycle1
+        if (timing.is_vblank_start())
+        {
+            vblank_flag = true;
+            // post an interrupt to the cpu if vblank nmi is set
+            if (vblank_nmi_flag) { nmi_pending = true; }
+        }
+
+        // vblank is over. pencils down. i hope you finished all your work.
+        if (timing.is_vblank_end())
+        {
+            // clean up for render time
+            vblank_flag = false;
+            nmi_pending = false;
+            sprite_zero_hit_flag = false;
+            sprite_overflow_flag = false;
+        }
+
+        // scanlines 0-239
+        if (timing.is_visible_scanline())
+        {
+            // https://www.nesdev.org/wiki/PPU_sprite_evaluation
+            // Each scanline, the PPU reads the spritelist (that is, Object Attribute Memory) to see which to draw
+            if (timing.is_start_of_scanline())
+            {
+                sprites.begin_scanline(timing.scanline());
+            }
+            // 64 bytes of secondary OAM cleared
+            else if (timing.is_sprite_clear_cycle())
+            {
+                // First, it clears the list of sprites to draw in secondary oam, 1 byte at time
+                sprites.clear(timing.cycle());
+            }
+            else if (timing.is_sprite_evaluation_cycle())
+            {
+                // Second, it reads through OAM, checking which sprites will be on this scanline.
+                // It chooses the first eight it finds that do.
+                sprites.evaluate(timing.scanline(), timing.cycle());
+            }
+            else if (timing.is_sprite_fetch_cycle())
+            {
+                sprites.fetch(timing.scanline(), timing.cycle());
+            }
+        }
+
+        // tick once per PPU cycle
+        timing.tick(rendering_enabled());
     }
 
     // https://www.nesdev.org/wiki/PPU_registers#PPUDATA_-_VRAM_data_($2007_read/write)
@@ -373,14 +422,15 @@ namespace nes {
     // yields an index from 0..31 for accessing the palette table
     uint16_t PPU::mirror_palette_address(uint16_t address)
     {
-        // $3F10 becomes 0x10, etc
+        // 14-bits of address space in palette addresses
         address &= 0x3FFF;
 
-        uint8_t i = 0;
-        if (address == 0x10) i = 0x00;
-        if (address == 0x14) i = 0x04;
-        if (address == 0x18) i = 0x08;
-        if (address == 0x1C) i = 0x0C;
+        // mirrors $3F20-$3FFF down to $3F00-$3F1F, $3F10 becomes 0x10, etc
+        uint8_t i = address & 0X001F;
+        if (i == 0x10) i = 0x00;
+        if (i == 0x14) i = 0x04;
+        if (i == 0x18) i = 0x08;
+        if (i == 0x1C) i = 0x0C;
 
         return i;
     }
@@ -469,7 +519,210 @@ namespace nes {
 
     // https://www.nesdev.org/wiki/PPU_sprite_evaluation#Details
     // https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png
+    bool Scanline::is_sprite_clear_cycle() const { return cycle_ >=1 && cycle_ <= 64; };
+    bool Scanline::is_sprite_evaluation_cycle() const { return cycle_ >= 65 && cycle_ <= 256; };
     bool Scanline::is_sprite_fetch_cycle() const { return cycle_ >= 257 && cycle_ <= 320; };
+
+    // ============================================================================
+    // SpritePipeline
+    // ============================================================================
+
+    // clear 1 byte of secondary oam
+    void SpritePipeline::clear(int cycle)
+    {
+        // clearing secondary oam with 0xFF means they never match the
+        // scanline by accident
+        secondary_oam[cycle - 1] = 0xFF;
+    }
+
+    // Does this sprite intersect this scanline?
+    bool SpritePipeline::intersects(int scanline, uint8_t top)
+    {
+        int sprite_height = ppu.sprite_size_flag ? 16 : 8;
+        return (scanline >= top) && (scanline < top + sprite_height);
+    }
+
+    // there are 64 sprites, each is 4-bytes: x, tile, attr, y
+    // we need to walk each one and see if it is interesected by this scanline
+    // and then copy the hits into our secondary oam, tra
+    void SpritePipeline::evaluate(int scanline, int cycle)
+    {
+        // if we already scanned all sprites, we are done
+        if (oam_scan_index >= 64) return;
+
+        int base = oam_scan_index * 4;
+
+        // extract fields
+        uint8_t y = ppu.oam[base];
+        uint8_t tile = ppu.oam[base + 1];
+        uint8_t attr = ppu.oam[base + 2];
+        uint8_t x = ppu.oam[base + 3];
+
+        if (intersects(scanline, y))
+        {
+            // got a hit but we only handle up to 8 sprites per scanline
+            if (secondary_count < 8)
+            {
+                // secondary oam is 256 bytes of 64 sprites x 4 bytes each,
+                // get our starting offeset from sprite #
+                int dest = secondary_count * 4;
+
+                // store our hit sprite in secondary oam so we can draw it later
+                secondary_oam[dest] = y;
+                secondary_oam[dest + 1] = tile;
+                secondary_oam[dest + 2] = attr;
+                secondary_oam[dest + 3] = x;
+
+                // store state for fetch and draw
+                spr_x[secondary_count] = x; // x counter to avoid oam until needed
+                spr_attr[secondary_count] = attr; // palette, front/back, reversed
+
+                // sprite 0 hit detection, take low 8 bits of sprite index (0..7). we check for sprite 0 during draw.
+                spr_oam_index[secondary_count] = static_cast<uint8_t>(oam_scan_index);
+
+                secondary_count++;
+            }
+            else
+            {
+                // more than 8 sprites, so declare an overflow
+                overflow_ = true;
+            }
+        }
+        oam_scan_index++;
+    }
+
+    // Cycles 257-320: Sprite fetches (8 sprites total, 8 cycles per sprite)
+    void SpritePipeline::fetch(int scanline, int cycle)
+    {
+        // once per scanline
+        if (cycle == 257) { clear_unused_shifters(); }
+
+        // 8 sprites
+        uint8_t sprite_index = (cycle - 257) / 8;
+
+        // 8 cycles per sprite
+        uint8_t phase = (cycle - 257) % 8;
+
+        // can't go over the max
+        if (sprite_index >= secondary_count) { return; }
+
+        // extract sprite fields
+        int base = sprite_index * 4;
+        uint8_t y = secondary_oam[base];
+        uint8_t tile = secondary_oam[base + 1];
+        uint8_t attr = secondary_oam[base + 2];
+        uint8_t x = secondary_oam[base + 3];
+
+        // from https://www.nesdev.org/wiki/PPU_rendering#Cycles_257-320
+        // The tile data for the sprites on the next scanline are fetched here.
+        // Again, each memory access takes 2 PPU cycles to complete,
+        // and 4 are performed for each of the 8 sprites:
+        // 0 Garbage nametable byte but we store state for drawing and get our pattern table address
+        // 2 Garbage nametable byte
+        // 4 Pattern table tile low
+        // 6 Pattern table tile high (8 bytes above pattern table tile low address)
+        if (phase == 0)
+        {
+            // store state for draw
+            spr_x[secondary_count] = x; // x counter to avoid oam until needed
+            spr_attr[secondary_count] = attr; // palette, front/back, reversed
+
+            // latch pattern address for this sprite
+            spr_pattern_addr[sprite_index] = compute_pattern_address(scanline, y, tile, attr);
+        }
+        else if (phase == 4)
+        {
+            spr_shift_low[sprite_index] =
+                maybe_flipped_h(attr, ppu.ppu_bus_read(spr_pattern_addr[sprite_index]));
+        }
+        else if (phase == 6)
+        {
+            spr_shift_high[sprite_index] =
+                maybe_flipped_h(attr, ppu.ppu_bus_read(spr_pattern_addr[sprite_index] + 8));
+        }
+    }
+
+    // Returns the pattern address for the low byte of the sprite pattern row, so add 8 bytes to result to get the high
+    uint16_t SpritePipeline::compute_pattern_address(
+        int scanline,
+        uint8_t y,
+        uint8_t tile,
+        uint8_t attr
+    )
+    {
+        const int sprite_height = ppu.sprite_size_flag ? 16 : 8;
+
+        // fine_y = scanline offset within the sprite
+        // 0..7 for 8x8 or 0..15 for 8x16
+        int fine_y = scanline - y;
+
+        // Vertical flip? (attr bit 7)
+        if (attr & 0x80)
+            fine_y = (sprite_height - 1) - fine_y;  // takes a fine_y of 0 1 2 3 4 ... and turns it into ... 4 3 2 1 0
+
+        if (!ppu.sprite_size_flag) // 8x16 when set
+        {
+            // from https://www.nesdev.org/wiki/PPU_programmer_reference#PPUCTRL_-_Miscellaneous_settings_($2000_write)
+            // in 8x8, sprite_pattern_table_address_flag (0: $0000; 1: $1000; ignored in 8x16 mode)
+            uint16_t table_base = ppu.sprite_pattern_table_address_flag ? 0x1000 : 0x0000;
+
+            // 4kb base + (each tile is 16 bytes) + row into the sprite = btye address into pattern table for the row
+            return table_base + (tile * 16) + fine_y;
+        }
+
+        // from https://www.nesdev.org/wiki/PPU_programmer_reference#Byte_1_-_Tile/index
+        // "For 8x16 sprites (bit 5 of PPUCTRL set), the PPU ignores the pattern table selection and
+        // selects a pattern table from bit 0 of this number.
+        // Bits 7-0: Tile number of top of sprite (0 to 254; bottom half gets the next tile)"
+        uint16_t table_base = (tile & 0x01) ? 0x1000 : 0x0000;
+
+        // valid top indexes are even, so first force an even index from the tile to make next step easy
+        uint8_t tile_index = tile & 0xFE;
+
+        // for our given line, with 16 lines of y, we stay here on 0..7 and move up 1 on 8-15
+        uint8_t tile_for_row = (fine_y < 8) ? tile_index : (tile_index + 1);
+
+        // 4kb base + (each tile is 16 bytes) + (our row is the low 3 bits of fine y from either high/low sprite we had)
+        return table_base + ((tile_for_row) * 16) + (fine_y & 0x07);
+    }
+
+    // horizontally flip the byte if attr says so
+    uint8_t SpritePipeline::maybe_flipped_h(const uint8_t attributes, const uint8_t byte)
+    {
+        // attr holds "flip horizontal" and if so, we use a lookup table to reverse the bits
+        if ((attributes & 0x40) != 0) { return reverse_table[byte]; }
+        return byte;
+    }
+
+    // returns true if attr
+    bool SpritePipeline::flip_vertical(const uint8_t attributes) { return (attributes & 0x80) != 0; }
+
+    void SpritePipeline::clear_unused_shifters()
+    {
+        for (int i = secondary_count; i < 8; i++)
+        {
+            spr_shift_low[i] = 0;
+            spr_shift_high[i] = 0;
+        }
+    }
+
+    // reset everything and take it from the top
+    void SpritePipeline::begin_scanline(int scanline)
+    {
+        // # of sprites in secondary oam
+        secondary_count = 0;
+
+        // primary oam selector
+        oam_scan_index = 0;
+
+        // whether we exceed 8 sprites on the current scanline
+        overflow_ = false;
+    }
+
+    bool SpritePipeline::overflow() const { return overflow_; }
+
+
+}
 
 // ============================================================================
 // BackgroundPipeline
