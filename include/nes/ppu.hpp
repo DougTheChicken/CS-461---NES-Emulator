@@ -99,6 +99,7 @@ namespace nes
         {
         }
 
+        void reset();
         void clear(int cycle);
         bool intersects(int scanline, uint8_t y);
         void evaluate(int scanline, int cycle);

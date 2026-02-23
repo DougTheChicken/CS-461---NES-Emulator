@@ -11,7 +11,38 @@ namespace nes {
     void PPU::reset()
     {
         oam_address = 0;
-        // TODO: more to do here
+        timing.reset();
+        bg.reset();
+        sprites.reset();
+        base_nametable_select = 0; // nametable x and y
+        vram_address_increment_flag = false; //  (0: add 1, going across; 1: add 32, going down)
+        sprite_pattern_table_address_flag = false; // $0000 when clear, $1000 when set
+        background_pattern_table_address_flag = false; // $0000 when clear, $1000 when set
+        sprite_size_flag = false; // 8x16 when set
+        ppu_master_slave_flag = false; //(0: read backdrop from EXT pins; 1: output color on EXT pins)
+        vblank_nmi_flag = false; // (0: off, 1: on) NMI enable on vblank
+        greyscale_flag = false; // (0: normal color, 1: greyscale)
+        leftmost_background_flag = false; // 1: Show background in leftmost 8 pixels of screen, 0: Hide
+        leftmost_sprite_flag = false; // 1: Show sprites in leftmost 8 pixels of screen, 0: Hide
+        background_rendering_flag = false; // 1: Enable background rendering
+        sprite_rendering_flag = false; // 1: Enable sprite rendering
+        emphasize_red = false;
+        emphasize_green = false;
+        emphasize_blue = false;
+        sprite_overflow_flag = false; // Set when more than 8 sprites appear on a scanline
+        sprite_zero_hit_flag = false; // Set when sprite 0 overlaps a non-transparent background pixel
+        vblank_flag = false; // Set at start of VBlank, cleared on read of $2002. Unreliabe, use NMI instead
+        v = 0; // Current VRAM address (15 bits). During rendering, used for the scroll position.
+        t = 0;
+        x = 0;
+        w = false;
+        data_buffer = 0;
+        oam_dma_page = 0; // High byte of CPU address for OAM DMA ($XX00–$XXFF)
+        nmi_pending = false; // signal to CPU: take NMI
+        nmi_prev = false; // edge detect previous (vblank_flag && vblank_nmi_flag)
+        frame_complete = false;
+        vertical_mirroring = false;
+        open_bus = 0;
     }
 
     void PPU::step() {
@@ -527,12 +558,21 @@ namespace nes {
     // SpritePipeline
     // ============================================================================
 
+    void SpritePipeline::reset() {
+        secondary_count = 0;
+        oam_scan_index = 0;
+        overflow_ = false;
+    }
+
     // clear 1 byte of secondary oam
     void SpritePipeline::clear(int cycle)
     {
         // clearing secondary oam with 0xFF means they never match the
         // scanline by accident
-        secondary_oam[cycle - 1] = 0xFF;
+        int idx = cycle - 1;
+        if (idx < static_cast<int>(sizeof(secondary_oam))) {
+            secondary_oam[idx] = 0xFF;
+        }
     }
 
     // Does this sprite intersect this scanline?
@@ -624,8 +664,8 @@ namespace nes {
         if (phase == 0)
         {
             // store state for draw
-            spr_x[secondary_count] = x; // x counter to avoid oam until needed
-            spr_attr[secondary_count] = attr; // palette, front/back, reversed
+            spr_x[sprite_index] = x; // x counter to avoid oam until needed
+            spr_attr[sprite_index] = attr; // palette, front/back, reversed
 
             // latch pattern address for this sprite
             spr_pattern_addr[sprite_index] = compute_pattern_address(scanline, y, tile, attr);
