@@ -729,40 +729,134 @@ namespace nes {
 // ============================================================================
 
     // brings all registers and latches to 0
-    void BackgroundPipeline::reset() {
-
+    void BackgroundPipeline::reset() 
+    {
+        bg_pattern_low = 0;
+        bg_pattern_high = 0;
+        bg_attr_low = 0;
+        bg_attr_high = 0;
+        next_pattern_high = 0;
+        next_pattern_low = 0;
+        next_tile_id = 0;
+        next_attr = 0;
     }
 
     // advance internal shift registers by 1 bit
     // should be called every ppu cycle when rendering is enabled
-    void BackgroundPipeline::tick() {
-
+    void BackgroundPipeline::tick() 
+    {
+        bg_pattern_low <<= 1;
+        bg_pattern_high <<= 1;
+        bg_attr_low <<= 1;
+        bg_attr_high <<= 1;
     }
 
     // transfers the next latched bytes into the shift registers
     // should occur every 8 cycles
-    void BackgroundPipeline::reload() {
+    void BackgroundPipeline::reload() 
+    {
+        // load pattern data into the lower 8 bits
+        bg_pattern_low  = (bg_pattern_low & 0xFF00)  | next_pattern_low;
+        bg_pattern_high = (bg_pattern_high & 0xFF00) | next_pattern_high;
 
+        // handle attribute bit 0
+        // logic: clear lower 8 bits and fill with 1s
+        bg_attr_low &= 0xFF00;
+        if (next_attr & 0x01) {
+            bg_attr_low |= 0x00FF;
+        }
+
+        // handle attribute bit 1
+        // logic: clear lower 8 bits and fill with 1s
+        bg_attr_high &= 0xFF00;
+        if (next_attr & 0x02) {
+            bg_attr_high |= 0x00FF;
+        }
     }
 
     // logic for the 8-cycle fetch phase
     // should populate the 'next_' latches using the current vram address
-    void BackgroundPipeline::fetch_nametable() {    // 1-2: fetch nametable
-    
-    }
-    void BackgroundPipeline::fetch_attribute() {    // 3-4: fetch attribute
+    void BackgroundPipeline::fetch_nametable()      // 1-2: fetch nametable
+    {
+        uint16_t base = 0x2000;
+        
+        // determine which nametable we are currently in
+        uint16_t nametable_offset = (ppu.v & 0x0C00); 
+        
+        // determine which row & column
+        uint16_t cell_offset = (ppu.v & 0x03FF); 
 
-    }
-    void BackgroundPipeline::fetch_pattern_low() {  // 5-6: fetch low pattern
+        // determine which exact tile needs to be drawn
+        uint16_t final_address = base + nametable_offset + cell_offset;
 
+        // save the tile index for the next stages
+        next_tile_id = ppu.ppu_bus_read(final_address);
     }
-    void BackgroundPipeline::fetch_pattern_high() {  // 7-8: fetch high pattern
+    void BackgroundPipeline::fetch_attribute()      // 3-4: fetch attribute
+    {
+        // attribute address calculation
+        uint16_t address = 0x23C0 | (ppu.v & 0x0C00) | ((ppu.v >> 4) & 0x38) | ((ppu.v >> 2) & 0x07);
+        uint8_t raw_byte = ppu.ppu_bus_read(address);
 
+        // shift the byte to get the correct 2 bits for the current pixel area
+        // if in the bottom half of a 32x32 attribute block, shift 4 bits
+        if (ppu.v & 0x0040) raw_byte >>= 4; 
+        // if in the right half of a 32x32 attribute block, shift 2 bits
+        if (ppu.v & 0x0002) raw_byte >>= 2;
+
+        next_attr = raw_byte & 0x03; // mask everything but the needed 2 bits
+    }
+    void BackgroundPipeline::fetch_pattern_low()    // 5-6: fetch low pattern
+    {
+        uint16_t fine_y = (ppu.v >> 12) & 0x07;
+        uint16_t table_base = ppu.background_pattern_table_address_flag ? 0x1000 : 0x0000;
+        uint16_t address = table_base + (next_tile_id * 16) + fine_y;
+        next_pattern_low = ppu.ppu_bus_read(address);
+    }
+    void BackgroundPipeline::fetch_pattern_high()    // 7-8: fetch high pattern
+    {
+        uint16_t fine_y = (ppu.v >> 12) & 0x07;
+        uint16_t table_base = ppu.background_pattern_table_address_flag ? 0x1000 : 0x0000;
+        // high plane is 8 bytes after the low plane
+        uint16_t address = table_base + (next_tile_id * 16) + fine_y + 8;
+        next_pattern_high = ppu.ppu_bus_read(address);
     }
 
     // calculate the 4-bit palette index for the current pixel
     // should use the fine_x scroll (0-7) from the ppu internal 'x' register
-    uint8_t BackgroundPipeline::get_pixel() const {
-        
+    uint8_t BackgroundPipeline::get_pixel() const 
+    {
+        // determine how many pixels offset from the start we currently are
+        // note: this comes from the ppu fine_x scroll
+        uint8_t scroll_offset = ppu.x;
+
+        // mask to look at exactly one bit in shift registers
+        uint16_t pixel_selector = 0x8000 >> scroll_offset;
+
+        // check each of the data layers for a 1 in this spot
+        uint8_t shape_bit_0 = 0;
+        if (bg_pattern_low & pixel_selector) {
+            shape_bit_0 = 1;        // value if bit 0 is set
+        }
+
+        uint8_t shape_bit_1 = 0;
+        if (bg_pattern_high & pixel_selector) {
+            shape_bit_1 = 2;        // value if bit 1 is set
+        }
+
+        // Attribute Layer (The "Color Palette" for the tile)
+        uint8_t palette_bit_0 = 0;
+        if (bg_attr_low & pixel_selector) {
+            palette_bit_0 = 4;      // value if bit 2 is set
+        }
+
+        uint8_t palette_bit_1 = 0;
+        if (bg_attr_high & pixel_selector) {
+            palette_bit_1 = 8;      // value if bit 3 is set
+        }
+
+        // add all bits together to determine the final colour index (0-15)
+        uint8_t pixel_index = shape_bit_0 + shape_bit_1 + palette_bit_0 + palette_bit_1;
+        return pixel_index;
     }
 }
