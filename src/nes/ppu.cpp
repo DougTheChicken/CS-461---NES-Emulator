@@ -722,14 +722,12 @@ namespace nes {
     bool SpritePipeline::overflow() const { return overflow_; }
 
 
-}
-
 // ============================================================================
 // BackgroundPipeline
 // ============================================================================
 
-    // brings all registers and latches to 0
-    void BackgroundPipeline::reset() 
+// brings all registers and latches to 0
+    void BackgroundPipeline::reset()
     {
         bg_pattern_low = 0;
         bg_pattern_high = 0;
