@@ -18,7 +18,7 @@ public:
     void step_to(cycle_t ppu_target);
 
     // Execute a single instruction
-    void step();
+    int step();
 
     // Debug getters
     uint16_t pc() const { return PC; }
