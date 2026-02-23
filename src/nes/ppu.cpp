@@ -470,4 +470,46 @@ namespace nes {
     // https://www.nesdev.org/wiki/PPU_sprite_evaluation#Details
     // https://www.nesdev.org/w/images/default/thumb/4/4f/Ppu.svg/2560px-Ppu.svg.png
     bool Scanline::is_sprite_fetch_cycle() const { return cycle_ >= 257 && cycle_ <= 320; };
+
+// ============================================================================
+// BackgroundPipeline
+// ============================================================================
+
+    // brings all registers and latches to 0
+    void BackgroundPipeline::reset() {
+
+    }
+
+    // advance internal shift registers by 1 bit
+    // should be called every ppu cycle when rendering is enabled
+    void BackgroundPipeline::tick() {
+
+    }
+
+    // transfers the next latched bytes into the shift registers
+    // should occur every 8 cycles
+    void BackgroundPipeline::reload() {
+
+    }
+
+    // logic for the 8-cycle fetch phase
+    // should populate the 'next_' latches using the current vram address
+    void BackgroundPipeline::fetch_nametable() {    // 1-2: fetch nametable
+    
+    }
+    void BackgroundPipeline::fetch_attribute() {    // 3-4: fetch attribute
+
+    }
+    void BackgroundPipeline::fetch_pattern_low() {  // 5-6: fetch low pattern
+
+    }
+    void BackgroundPipeline::fetch_pattern_high() {  // 7-8: fetch high pattern
+
+    }
+
+    // calculate the 4-bit palette index for the current pixel
+    // should use the fine_x scroll (0-7) from the ppu internal 'x' register
+    uint8_t BackgroundPipeline::get_pixel() const {
+        
+    }
 }

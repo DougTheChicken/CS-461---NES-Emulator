@@ -52,8 +52,29 @@ namespace nes
     public:
         explicit BackgroundPipeline(PPU& ppu) : ppu(ppu)
         {
+            reset();
         }
-        // TODO: define Background public and private methods
+            // brings all registers and latches to 0
+            void reset();
+
+            // advance internal shift registers by 1 bit
+            // should be called every ppu cycle when rendering is enabled
+            void tick();
+
+            // transfers the next latched bytes into the shift registers
+            // should occur every 8 cycles
+            void reload();
+
+            // logic for the 8-cycle fetch phase
+            // should populate the 'next_' latches using the current vram address
+            void fetch_nametable();     // 1-2: fetch nametable
+            void fetch_attribute();     // 3-4: fetch attribute
+            void fetch_pattern_low();   // 5-6: fetch low pattern
+            void fetch_pattern_high();  // 7-8: fetch high pattern
+
+            // calculate the 4-bit palette index for the current pixel
+            // should use the fine_x scroll (0-7) from the ppu internal 'x' register
+            uint8_t get_pixel() const;
 
     private:
         PPU& ppu;
