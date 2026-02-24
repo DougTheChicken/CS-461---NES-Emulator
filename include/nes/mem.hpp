@@ -61,6 +61,9 @@ private:
 
     // DMA register placeholder ($4014)
     uint8_t oam_dma = 0;
+
+    // Open bus returns whatever was last read successfully
+    uint8_t open_bus = 0;
 };
 
 } // namespace nes

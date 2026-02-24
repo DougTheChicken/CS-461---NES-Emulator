@@ -17,6 +17,7 @@ namespace nes {
         std::size_t chr_size_bytes() const { return CHR_ROM_size * 8192u; }
         const uint8_t* chr_data() const { return CHR_data.data(); }
         const bool alternate_nametable_layout() const { return has_alternate_nametable_layout; }
+        const bool nametable_arrangement() const { return nametable_arrangement_; }
         uint8_t mapper() const { return mapper_id; }
         bool is_loaded() const { return parsed; }
 
@@ -28,7 +29,7 @@ namespace nes {
         int CHR_ROM_size = 0;   // 8KB units
 
         // Flags 6
-        bool nametable_arrangement; // false: vertical, true: horizontal
+        bool nametable_arrangement_; // false: vertical, true: horizontal
         bool has_battery_backed_RAM;
         bool has_trainer;
         bool has_alternate_nametable_layout;

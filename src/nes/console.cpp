@@ -39,10 +39,21 @@ bool console::load_rom(char* filepath) {
 
     mem.map_prg(rom.prg_data(), rom.prg_size_bytes());
     cpu.attach_memory(&mem);
+    ppu.vertical_mirroring = rom.alternate_nametable_layout();
+
+    // TODO: change 0x1FFF bank translation when we implement mapper support
+    ppu.set_chr_read_callback([this](uint16_t addr) -> uint8_t { return rom.chr_data()[addr & 0x1FFF]; });
+    ppu.set_chr_write_callback([this](uint16_t addr, uint8_t value) {
+        // TODO: when Mapper with chr_write(uint16_t addr, uint8_t value) uncomment mapper->chr_write(addr, value);
+    });
+
+
     cpu.reset();
 
     uint16_t reset = static_cast<uint16_t>(mem.read(0xFFFC)) |
                      (static_cast<uint16_t>(mem.read(0xFFFD)) << 8);
+
+
 
     std::fprintf(stderr, "[console] ResetVector=$%04X  FirstOpcode=$%02X\n",
                  (unsigned)reset, (unsigned)mem.read(reset));
@@ -69,8 +80,26 @@ void console::run_rom() {
 }
 
 void console::step(cycle_t stepcount) {
-    cpu.step_to(master_cycle_count + stepcount);
-    master_cycle_count += stepcount;
+
+    // we need to step apu & ppu along with cpu
+    cycle_t target = master_cycle_count + stepcount;
+
+    while (master_cycle_count < target) {
+        // step PPU
+        for (int i = 0; i < CPU_TO_PPU; i++) { ppu.step(); }
+        apu.step(); // step one APU to one CPU here. APU handles its own timing
+
+        // check NMI and IRQ
+        if (ppu.nmi_pending) {
+            ppu.nmi_pending = false;
+            cpu.nmi();
+        }
+        if (apu.frame_irq_flag || apu.dmc.irq_pending) { cpu.irq(); }
+
+        // step CPU
+        cpu.step_to(master_cycle_count + 1);
+        master_cycle_count++;
+    }
     update_framebuffer();
 }
 
@@ -97,6 +126,7 @@ void console::init() {
     master_cycle_count = 0;
 
     cpu.attach_memory(&mem);
+    apu.dmc.attach_memory(&mem);
     cpu.reset();
 }
 

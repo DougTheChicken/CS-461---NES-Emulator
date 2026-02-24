@@ -20,6 +20,12 @@ public:
     // Execute a single instruction
     int step();
 
+    // handle non-maskable interrupts for PPU
+    void nmi();
+
+    // handle interrupts for APU
+    void irq();
+
     // Debug getters
     uint16_t pc() const { return PC; }
     uint8_t  a()  const { return A; }

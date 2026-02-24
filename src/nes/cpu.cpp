@@ -49,6 +49,10 @@ void CPU::init_state() {
                  (unsigned)PC, (unsigned)hi, (unsigned)lo);
 }
 
+// TODO: Implement NMI & IRQ
+void CPU::nmi() {}
+void CPU::irq() {}
+
 void CPU::reset() {
     init_state();
 }
