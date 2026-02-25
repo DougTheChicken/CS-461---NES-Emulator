@@ -49,6 +49,10 @@ bool console::load_rom(char* filepath) {
     return true;
 }
 
+bool console::rom_loaded() const {
+    return rom.is_loaded();
+}
+
 void console::run_rom() {
     for (int i = 0; i < 200000; ++i) {
         step_instruction();

@@ -64,6 +64,16 @@ namespace ui {
                 ::g_window->close();
                 return false;
             }
+            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Space) {
+                if (emu.rom_loaded()) {
+                    if (!is_running) {
+                        std::fprintf(stderr, "Resuming emulation\n");
+                    } else {
+                        std::fprintf(stderr, "Pausing emulation\n");
+                    }
+                    is_running = !is_running;
+                }
+            }
         }
         
         // Update texture from framebuffer

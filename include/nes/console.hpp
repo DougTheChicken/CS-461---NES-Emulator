@@ -8,7 +8,6 @@
 #include "nes/mem.hpp"
 #include "nes/ppu.hpp"
 #include "nes/apu.hpp"
-#include "nes/timing.hpp"
 
 class console {
 public:
@@ -16,6 +15,7 @@ public:
     ~console();
 
     bool load_rom(char* filepath);
+    bool rom_loaded() const;
 
     void run_rom();
     void step(cycle_t stepcount);
