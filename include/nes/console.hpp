@@ -14,7 +14,7 @@ public:
     console();
     ~console();
 
-    bool load_rom(char* filepath);
+    bool load_rom(const char* filepath);
     bool rom_loaded() const;
 
     void run_rom();

@@ -15,7 +15,7 @@ console::console()
 }
 console::~console() = default;
 
-bool console::load_rom(char* filepath) {
+bool console::load_rom(const char* filepath) {
     if (!rom.load_from_file(filepath)) {
         std::fprintf(stderr, "[console] Failed to load ROM: %s\n", filepath);
         return false;
@@ -109,6 +109,9 @@ void console::reset_all() {
     cpu.reset();
     rom.reset();
     mem.reset();
+    ppu.reset();
+    apu.reset();
+    std::memset(framebuffer_data, 0, sizeof(framebuffer_data)); // Clear framebuffer
     std::fprintf(stderr, "[console] Reset complete\n");
 }
 
