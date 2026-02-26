@@ -71,8 +71,18 @@ FetchContent_MakeAvailable(nfd)
 
 # Make NFD sources available to build: include headers and compile zenity backend
 set(NFD_SRC_DIR ${nfd_SOURCE_DIR}/src)
+set(NFD_SOURCES
+        ${NFD_SRC_DIR}/nfd_common.c
+        ${NFD_SRC_DIR}/nfd_zenity.c
+)
+
 target_include_directories(nes_ui PUBLIC ${NFD_SRC_DIR}/include)
-target_sources(nes_ui PRIVATE ${NFD_SRC_DIR}/nfd_common.c ${NFD_SRC_DIR}/nfd_zenity.c)
+target_sources(nes_ui PRIVATE ${NFD_SOURCES})
+
+# Silence warning only for NFD sources (GNU/Clang only)
+set_source_files_properties(${NFD_SOURCES} PROPERTIES
+        COMPILE_FLAGS "$<$<C_COMPILER_ID:GNU,Clang>:-Wno-format-truncation>"
+)
 
 # Link UI target with SFML, nes_lib and gtest
 target_link_libraries(nes_ui PUBLIC sfml-graphics sfml-window sfml-system nes_lib GTest::gtest_main GTest::gtest)
