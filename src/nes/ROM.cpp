@@ -45,7 +45,7 @@ namespace nes {
         // const uint8_t flags10 = header[10];
 
         // Flags 6 bit layout: https://www.nesdev.org/wiki/INES#Flags_6
-        nametable_arrangement          = (flags6 & 0x01) != 0;
+        nametable_arrangement_          = (flags6 & 0x01) != 0;
         has_battery_backed_RAM         = (flags6 & 0x02) != 0;
         has_trainer                    = (flags6 & 0x04) != 0;
         has_alternate_nametable_layout = (flags6 & 0x08) != 0;
@@ -86,7 +86,7 @@ namespace nes {
         this->CHR_ROM_size = 0;
 
         // booleans: use false, not NULL
-        this->nametable_arrangement = false;
+        this->nametable_arrangement_ = false;
         this->has_battery_backed_RAM = false;
         this->has_trainer = false;
         this->has_alternate_nametable_layout = false;

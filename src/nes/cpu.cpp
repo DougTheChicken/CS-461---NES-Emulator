@@ -49,6 +49,36 @@ void CPU::init_state() {
                  (unsigned)PC, (unsigned)hi, (unsigned)lo);
 }
 
+    void CPU::nmi() {
+    // Push PC high byte, then low byte
+    push((uint8_t)(PC >> 8));
+    push((uint8_t)(PC & 0xFF));
+    // Push status with B clear, U set
+    push((P & ~B_FLAG) | U_FLAG);
+    // Set interrupt disable flag
+    P |= I_FLAG;
+    // Load PC from NMI vector $FFFA-$FFFB
+    uint8_t lo = mem->read(0xFFFA);
+    uint8_t hi = mem->read(0xFFFB);
+    PC = (uint16_t)lo | ((uint16_t)hi << 8);
+}
+
+    void CPU::irq() {
+    // IRQ is ignored if interrupt disable flag is set
+    if (P & I_FLAG) return;
+    // Push PC high byte, then low byte
+    push((uint8_t)(PC >> 8));
+    push((uint8_t)(PC & 0xFF));
+    // Push status with B clear, U set
+    push((P & ~B_FLAG) | U_FLAG);
+    // Set interrupt disable flag
+    P |= I_FLAG;
+    // Load PC from IRQ vector $FFFE-$FFFF
+    uint8_t lo = mem->read(0xFFFE);
+    uint8_t hi = mem->read(0xFFFF);
+    PC = (uint16_t)lo | ((uint16_t)hi << 8);
+}
+
 void CPU::reset() {
     init_state();
 }

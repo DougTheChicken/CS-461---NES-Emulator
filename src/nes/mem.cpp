@@ -30,39 +30,39 @@ void Memory::map_prg(const uint8_t* prg_data, std::size_t prg_size) {
 uint8_t Memory::read(uint16_t addr) {
     // $0000-$1FFF: internal RAM, mirrored every 2KB
     if (addr < 0x2000) {
-        return ram[addr & 0x07FF];
+        open_bus = ram[addr & 0x07FF];
+        return open_bus;
     }
 
     // $2000-$3FFF: PPU registers, mirrored every 8 bytes
     if (addr < 0x4000) {
         uint16_t r = 0x2000 + (addr & 0x7);
-        // Minimal: return PPUSTATUS bit7 set so tight loops don't hang in early bringup
-        if (r == 0x2002) {
-            return 0x80;
-        }
-        return ppu.cpu_read_register(r);
+        open_bus = ppu.cpu_read_register(r);
+        return open_bus;
     }
 
     // $4000-$4017: APU and I/O
     if (addr < 0x4018) {
         if (addr == 0x4016) {
             // If strobe is high, continuously read the 'A' button state
-            if (strobe) return controller1 & 1;
+            if (strobe) { open_bus = controller1 & 1; return open_bus; }
 
             // Otherwise, read bit 0 and shift right
             uint8_t ret = controller1_shift & 1;
             controller1_shift >>= 1;
-            return ret;
+            open_bus = ret;
+            return open_bus;
         }
         if (addr == 0x4017) {
-            if (strobe) return controller2 & 1;
+            if (strobe) { open_bus = controller2 & 1; return open_bus; }
 
             uint8_t ret = controller2_shift & 1;
             controller2_shift >>= 1;
-            return ret;
+            open_bus = ret;
+            return open_bus;
         }
-        if (addr == 0x4014) return oam_dma;
-        if (addr == 0x4015) return apu.read_status();
+        if (addr == 0x4014) return open_bus;
+        if (addr == 0x4015) { open_bus = apu.read_status(); return open_bus; }
     }
 
     // $8000-$FFFF: PRG ROM
@@ -74,10 +74,11 @@ uint8_t Memory::read(uint16_t addr) {
         } else {
             offset &= (uint32_t)(prg_size_bytes - 1);
         }
-        return prg[offset];
+        open_bus = prg[offset];
+        return open_bus;
     }
 
-    return 0x00;
+    return open_bus;
 }
 
 void Memory::write(uint16_t addr, uint8_t value) {
@@ -98,7 +99,15 @@ void Memory::write(uint16_t addr, uint8_t value) {
 
     // $4000-$4017: APU and I/O
     if (addr < 0x4018) {
-        if (addr == 0x4014) { oam_dma = value; return; }
+        if (addr == 0x4014) {
+            oam_dma = value;
+            // we need to copy the page to the PPU
+            uint8_t page[256];
+            uint16_t base = static_cast<uint16_t>(value) << 8;
+            for (uint16_t i = 0; i < 256; i++) page[i] = read(base + i);
+            ppu.oam_dma_execute(page);
+            return;
+        }
 
         // Writing to 0x4016 controls the strobe latch for BOTH controllers
         if (addr == 0x4016) {
@@ -113,15 +122,8 @@ void Memory::write(uint16_t addr, uint8_t value) {
             return;
         }
 
-        // Note: Writing to 0x4017 does NOT affect the controllers on the NES. 
-        // It is strictly for the APU frame counter.
-        if (addr == 0x4017) {
-            apu_regs[addr - 0x4000] = value;
-            return;
-        }
-
-        apu_regs[addr - 0x4000] = value;
-        return;
+        // Everything else to the APU!
+        apu.write_register(addr, value);
     }
 
     // ROM space ignored for now

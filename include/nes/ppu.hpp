@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <functional>
 
 namespace nes
 {
@@ -204,8 +205,13 @@ namespace nes
         // PPU cannot directly access memory outside of its own space
         // so we get handed callback methods by the mapper or cartridge
         // that the PPU can then use to access  pattern tables $0000-$1FFF
-        void set_chr_read_callback(uint8_t (*callback)(uint16_t));
-        void set_chr_write_callback(void (*callback)(uint16_t, uint8_t));
+        // we want to pass a lambda but we can't convert to function pointers
+        // so we make these take std::function which can take a lambda
+        using ChrReadFn = std::function<uint8_t(uint16_t)>; // read takes (address)
+        using ChrWriteFn = std::function<void(uint16_t, uint8_t)>; // write takes (address, value)
+        void set_chr_read_callback(ChrReadFn callback) { chr_read_callback = std::move(callback); }
+        void set_chr_write_callback(ChrWriteFn callback) {chr_write_callback = std::move(callback);}
+
 
         // helper to tell Scanline, BackgroundPipeline and SpritePipeline when one of the rendering flags is set
         bool rendering_enabled() const;
@@ -336,8 +342,8 @@ namespace nes
         uint16_t mirror_palette_address(uint16_t address);
 
         // fields for CHR ROM/RAM callbacks (pattern tables $0000-$1FFF)
-        uint8_t (*chr_read_callback)(uint16_t) = nullptr;
-        void (*chr_write_callback)(uint16_t, uint8_t) = nullptr;
+        ChrReadFn chr_read_callback;
+        ChrWriteFn chr_write_callback;
 
         // want these to access PPU state without shipping a DTO around since we're all friends here.
         friend class BackgroundPipeline;

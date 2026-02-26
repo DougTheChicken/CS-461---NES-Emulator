@@ -321,8 +321,8 @@ namespace nes {
 
         if (address < 0x2000)
         {
-            // TODO: is this sufficient for now for cart/CHR reads?
-            return chr_ram[address];
+            if (chr_read_callback) return chr_read_callback(address);
+            return chr_ram[address]; // will we ever have CHR-RAM cart but we have no callback?
         }
         // $2000 - $3EFF nametable read
         if (address < 0x3F00)
@@ -344,8 +344,8 @@ namespace nes {
 
         if (address < 0x2000)
         {
-            // TODO: is this sufficient for now for cart/CHR writes?
-            chr_ram[address] = value;
+            if (chr_write_callback) { chr_write_callback(address, value); }
+            chr_ram[address] = value; // no write callback, so stick it here? does this happen?
         }
         // $2000 - $3EFF nametable write
         else if (address < 0x3F00)
