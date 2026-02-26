@@ -18,6 +18,12 @@ add_executable(mem_tests
 target_link_libraries(mem_tests PRIVATE nes_lib)
 add_test(NAME mem_tests COMMAND mem_tests)
 
+
+add_executable(ppu_tests
+        ppu/ppu_test.cpp
+)
+target_link_libraries(ppu_tests PRIVATE nes_lib)
+add_test(NAME ppu_tests COMMAND mem_tests)
 add_executable(tests
         test_sanity.cpp
 )
