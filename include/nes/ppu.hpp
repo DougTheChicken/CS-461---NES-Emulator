@@ -333,6 +333,11 @@ namespace nes
         // tricky, so we only implement v increment logic once
         void increment_v();
 
+        void increment_scroll_x();
+        void increment_scroll_y();
+        void transfer_address_x();
+        void transfer_address_y();
+
         // Memory address mirroring helpers
         // https://www.nesdev.org/wiki/Mirroring#Nametable_Mirroring
         uint16_t mirror_nametable_address(uint16_t address);

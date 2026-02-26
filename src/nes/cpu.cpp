@@ -242,6 +242,170 @@ int CPU::step() {
         // ---- NOP ----
         case 0xEA: cycles_until_cpu_boundary += 2; break;
 
+        case 0x4A: { // LSR A
+            // Handle the Carry Flag (C_FLAG)
+            if (A & 0x01) {
+                P |= C_FLAG;
+            }
+            else {
+                P &= ~C_FLAG;
+            }
+
+            // Shift the accumulator right by 1
+            A >>= 1;
+
+            // Handle Zero (Z_FLAG) and Negative (N_FLAG)
+            setZN(A);
+
+            cycles_until_cpu_boundary += 2;
+            break;
+        }
+
+        case 0x26: { // ROL zp
+            // Fetch the zero-page address and read the current value from memory
+            uint8_t zp_addr = fetch8();
+            uint8_t value = mem->read(zp_addr);
+
+            // Grab the bit that is about to fall off the left edge (to become the new carry)
+            bool new_carry = (value & 0x80) != 0;
+
+            // Grab the current carry flag (to rotate into Bit 0)
+            uint8_t old_carry = (P & C_FLAG) ? 1 : 0;
+
+            // Perform the rotation
+            value = (value << 1) | old_carry;
+
+            // Write the rotated value back to the zero page
+            mem->write(zp_addr, value);
+
+            // Update the CPU Status Flags
+            if (new_carry) {
+                P |= C_FLAG;
+            }
+            else {
+                P &= ~C_FLAG;
+            }
+            setZN(value);
+
+            cycles_until_cpu_boundary += 5;
+            break;
+        }
+
+        case 0x45: { // EOR zp
+            // Fetch the zero-page address and read the value
+            uint8_t zp_addr = fetch8();
+            uint8_t value = mem->read(zp_addr);
+
+            // Perform the bitwise XOR with the Accumulator
+            A ^= value;
+
+            // Update the Zero and Negative flags based on the new Accumulator value
+            setZN(A);
+
+            cycles_until_cpu_boundary += 3;
+            break;
+        }
+
+        case 0x25: { // AND zp
+            // Fetch the zero-page address and read the value
+            uint8_t zp_addr = fetch8();
+            uint8_t value = mem->read(zp_addr);
+
+            // Perform the bitwise AND with the Accumulator
+            A &= value;
+
+            // Update the Zero and Negative flags based on the new Accumulator value
+            setZN(A);
+
+            cycles_until_cpu_boundary += 3;
+            break;
+        }
+
+        case 0x86: { // STX zp
+            // Fetch the zero-page address
+            uint8_t zp_addr = fetch8();
+
+            // Write the value of the X register to that memory address
+            mem->write(zp_addr, X);
+
+            cycles_until_cpu_boundary += 3;
+            break;
+        }
+
+        case 0x40: { // RTI - Return from Interrupt
+            // Pop the Processor Status (P) register from the stack
+            P = (pop() & ~B_FLAG) | U_FLAG;
+
+            // Pop the Program Counter (PC) from the stack
+            uint16_t pc_low = pop();
+            uint16_t pc_high = pop();
+
+            // Reconstruct the 16-bit Program Counter
+            PC = (pc_high << 8) | pc_low;
+
+            cycles_until_cpu_boundary += 6;
+            break;
+        }
+
+        case 0x69: { // ADC imm
+            // Fetch the immediate value directly from the instruction
+            uint8_t value = fetch8();
+
+            // Perform the 16-bit addition
+            uint8_t carry_in = (P & C_FLAG) ? 1 : 0;
+            uint16_t sum = A + value + carry_in;
+
+            // Set the Overflow Flag (V_FLAG)
+            if (~(A ^ value) & (A ^ sum) & 0x80) {
+                P |= V_FLAG;
+            }
+            else {
+                P &= ~V_FLAG;
+            }
+
+            // Set the Carry Flag
+            if (sum > 0xFF) {
+                P |= C_FLAG;
+            }
+            else {
+                P &= ~C_FLAG;
+            }
+
+            // Store the 8-bit result in the Accumulator
+            A = sum & 0xFF;
+
+            // Update Zero and Negative flags
+            setZN(A);
+
+            cycles_until_cpu_boundary += 2;
+            break;
+        }
+
+        case 0xB0: { // BCS rel
+            // Fetch the offset and cast it to a signed 8-bit integer
+            int8_t offset = static_cast<int8_t>(fetch8());
+
+            // Base cycles
+            cycles_until_cpu_boundary += 2;
+
+            // Check if we should branch
+            if (P & C_FLAG) {
+                uint16_t old_pc = PC;
+
+                // Add the signed offset to the Program Counter
+                PC += offset;
+
+                // Add 1 cycle because the branch succeeded
+                cycles_until_cpu_boundary += 1;
+
+                // Add 1 more cycle if the branch crossed a page boundary
+                if ((old_pc & 0xFF00) != (PC & 0xFF00)) {
+                    cycles_until_cpu_boundary += 1;
+                }
+            }
+            break;
+        }
+
         default:
             std::fprintf(stderr,
                          "[cpu] UNIMPL opcode=%02X at PC=%04X  A=%02X X=%02X Y=%02X P=%02X S=%02X\n",
