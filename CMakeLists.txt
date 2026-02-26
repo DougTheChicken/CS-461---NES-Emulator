@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(NES_Emulator LANGUAGES CXX)
+project(NES_Emulator LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -59,7 +59,36 @@ target_include_directories(nes_ui
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(nes_ui PUBLIC sfml-graphics sfml-window sfml-system)
+include(FetchContent)
+
+# Fetch nativefiledialog (NFD) so <nfd.h> and the library are available
+FetchContent_Declare(
+    nfd
+    GIT_REPOSITORY https://github.com/mlabbe/nativefiledialog.git
+    GIT_TAG        master
+)
+FetchContent_MakeAvailable(nfd)
+
+# Make NFD sources available to build: include headers and compile zenity backend
+set(NFD_SRC_DIR ${nfd_SOURCE_DIR}/src)
+set(NFD_SOURCES
+        ${NFD_SRC_DIR}/nfd_common.c
+        ${NFD_SRC_DIR}/nfd_zenity.c
+)
+
+target_include_directories(nes_ui PUBLIC ${NFD_SRC_DIR}/include)
+target_sources(nes_ui PRIVATE ${NFD_SOURCES})
+
+# Silence warning only for NFD sources (GNU/Clang only)
+set_source_files_properties(${NFD_SOURCES} PROPERTIES
+        COMPILE_FLAGS "$<$<C_COMPILER_ID:GNU,Clang>:-Wno-format-truncation>"
+)
+
+# Link UI target with SFML, nes_lib and gtest
+target_link_libraries(nes_ui PUBLIC sfml-graphics sfml-window sfml-system nes_lib GTest::gtest_main GTest::gtest)
+if(TGUI_FOUND)
+    target_link_libraries(nes_ui PUBLIC TGUI::TGUI)
+endif()
 
 # ---- Executable with main.cpp; link SDL, and UI ----
 add_executable(nes_emu ${PROJECT_SOURCE_DIR}/src/main.cpp
