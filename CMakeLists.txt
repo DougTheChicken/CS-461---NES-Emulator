@@ -69,15 +69,30 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nfd)
 
-# Make NFD sources available to build: include headers and compile zenity backend
+# Make NFD sources available to build
 set(NFD_SRC_DIR ${nfd_SOURCE_DIR}/src)
-set(NFD_SOURCES
-        ${NFD_SRC_DIR}/nfd_common.c
-        ${NFD_SRC_DIR}/nfd_zenity.c
-)
+
+# 1. Start with the common file
+set(NFD_SOURCES ${NFD_SRC_DIR}/nfd_common.c)
+
+# 2. Dynamically add the correct OS-specific file
+if(WIN32)
+    list(APPEND NFD_SOURCES ${NFD_SRC_DIR}/nfd_win.cpp)
+elseif(APPLE)
+    list(APPEND NFD_SOURCES ${NFD_SRC_DIR}/nfd_cocoa.m)
+else()
+    list(APPEND NFD_SOURCES ${NFD_SRC_DIR}/nfd_zenity.c)
+endif()
 
 target_include_directories(nes_ui PUBLIC ${NFD_SRC_DIR}/include)
 target_sources(nes_ui PRIVATE ${NFD_SOURCES})
+
+# 3. Link required OS-specific system libraries for the native dialogs
+if(WIN32)
+    target_link_libraries(nes_ui PUBLIC ole32 uuid)
+elseif(APPLE)
+    target_link_libraries(nes_ui PUBLIC "-framework AppKit")
+endif()
 
 # Silence warning only for NFD sources (GNU/Clang only)
 set_source_files_properties(${NFD_SOURCES} PROPERTIES
