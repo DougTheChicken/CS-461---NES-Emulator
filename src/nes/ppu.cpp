@@ -8,6 +8,17 @@ namespace nes {
 
     PPU::PPU() : bg(*this), sprites(*this), timing() { reset(); }
 
+    static const uint32_t NES_SYSTEM_PALETTE[64] = {
+    0xFF545454, 0xFF001E74, 0xFF081090, 0xFF300088, 0xFF440064, 0xFF5C0030, 0xFF540400, 0xFF3C1800,
+    0xFF202A00, 0xFF083A00, 0xFF004000, 0xFF003C00, 0xFF00323C, 0xFF000000, 0xFF000000, 0xFF000000,
+    0xFF989698, 0xFF084CC4, 0xFF3032EC, 0xFF5C1EE4, 0xFF8814B0, 0xFFA01464, 0xFF982220, 0xFF783C00,
+    0xFF545A00, 0xFF287200, 0xFF087C00, 0xFF007628, 0xFF006678, 0xFF000000, 0xFF000000, 0xFF000000,
+    0xFFECEEEC, 0xFF4C9AEC, 0xFF787CEC, 0xFFB062EC, 0xFFE454EC, 0xFFEC58B4, 0xFFEC6A64, 0xFFD48820,
+    0xFFA0AA00, 0xFF74C400, 0xFF4CD020, 0xFF38CC6C, 0xFF38B4CC, 0xFF3C3C3C, 0xFF000000, 0xFF000000,
+    0xFFECEEEC, 0xFFA8CCEC, 0xFFBCBCEC, 0xFFD4B2EC, 0xFFECAEEC, 0xFFECAED4, 0xFFECB4B0, 0xFFE4C490,
+    0xFFCCD278, 0xFFB4DE78, 0xFFA8E290, 0xFF98E2B4, 0xFFA0D6E4, 0xFFA0A2A0, 0xFF000000, 0xFF000000
+    };
+
     void PPU::reset()
     {
         oam_address = 0;
@@ -46,50 +57,89 @@ namespace nes {
     }
 
     void PPU::step() {
-
-        // TODO: background scanlines and cycles
-
         // vblank flag: set at scanline 241 cycle 1, cleared at pre-render cycle1
-        if (timing.is_vblank_start())
-        {
+        if (timing.is_vblank_start()) {
             vblank_flag = true;
-            // post an interrupt to the cpu if vblank nmi is set
             if (vblank_nmi_flag) { nmi_pending = true; }
         }
 
-        // vblank is over. pencils down. i hope you finished all your work.
-        if (timing.is_vblank_end())
-        {
-            // clean up for render time
+        if (timing.is_vblank_end()) {
             vblank_flag = false;
             nmi_pending = false;
             sprite_zero_hit_flag = false;
             sprite_overflow_flag = false;
         }
 
-        // scanlines 0-239
-        if (timing.is_visible_scanline())
-        {
-            // https://www.nesdev.org/wiki/PPU_sprite_evaluation
-            // Each scanline, the PPU reads the spritelist (that is, Object Attribute Memory) to see which to draw
-            if (timing.is_start_of_scanline())
-            {
+        // ========================================================
+        // 1. RENDER VISIBLE PIXELS TO THE UI
+        // ========================================================
+        if (timing.is_visible_scanline() && timing.is_visible_cycle()) {
+            uint32_t final_pixel_color = 0xFF000000; // Default to black
+
+            if (background_rendering_flag) {
+                uint8_t bg_pixel = bg.get_pixel();
+                uint16_t palette_addr = 0x3F00 + bg_pixel;
+                uint8_t nes_color_index = ppu_bus_read(palette_addr) & 0x3F;
+                final_pixel_color = NES_SYSTEM_PALETTE[nes_color_index];
+            }
+
+            int x_coord = timing.cycle() - 1;
+            int y_coord = timing.scanline();
+            framebuffer[y_coord * 256 + x_coord] = final_pixel_color;
+        }
+
+        // ========================================================
+        // 2. BACKGROUND RENDERING & SCROLLING PIPELINE
+        // ========================================================
+        if (rendering_enabled()) {
+
+            // The 8-Cycle Fetch Sequence
+            if (timing.is_render_scanline() && timing.is_bg_fetch_cycle()) {
+                bg.tick();
+
+                switch (timing.cycle() % 8) {
+                case 1: bg.fetch_nametable(); break;
+                case 3: bg.fetch_attribute(); break;
+                case 5: bg.fetch_pattern_low(); break;
+                case 7: bg.fetch_pattern_high(); break;
+                case 0:
+                    bg.reload();
+                    increment_scroll_x();
+                    break;
+                }
+            }
+
+            // Y-Scroll and X-Reset
+            if (timing.is_render_scanline()) {
+                if (timing.cycle() == 256) {
+                    increment_scroll_y();
+                }
+                if (timing.cycle() == 257) {
+                    bg.reload();
+                    transfer_address_x();
+                }
+            }
+
+            // Y-Reset
+            if (timing.is_prerender_scanline() && timing.cycle() >= 280 && timing.cycle() <= 304) {
+                transfer_address_y();
+            }
+        }
+
+        // ========================================================
+        // 3. SPRITE EVALUATION
+        // ========================================================
+        if (timing.is_visible_scanline()) {
+            if (timing.is_start_of_scanline()) {
                 sprites.begin_scanline(timing.scanline());
             }
-            // 64 bytes of secondary OAM cleared
-            else if (timing.is_sprite_clear_cycle())
-            {
-                // First, it clears the list of sprites to draw in secondary oam, 1 byte at time
+            else if (timing.is_sprite_clear_cycle()) {
                 sprites.clear(timing.cycle());
             }
-            else if (timing.is_sprite_evaluation_cycle())
-            {
-                // Second, it reads through OAM, checking which sprites will be on this scanline.
-                // It chooses the first eight it finds that do.
+            else if (timing.is_sprite_evaluation_cycle()) {
                 sprites.evaluate(timing.scanline(), timing.cycle());
             }
-            else if (timing.is_sprite_fetch_cycle())
-            {
+            else if (timing.is_sprite_fetch_cycle()) {
                 sprites.fetch(timing.scanline(), timing.cycle());
             }
         }
@@ -896,5 +946,63 @@ namespace nes {
         // add all bits together to determine the final colour index (0-15)
         uint8_t pixel_index = shape_bit_0 + shape_bit_1 + palette_bit_0 + palette_bit_1;
         return pixel_index;
+    }
+
+    // Increments the horizontal position in v
+    void PPU::increment_scroll_x() {
+        if (!rendering_enabled()) return;
+
+        // Coarse X is the lower 5 bits (0-31)
+        if ((v & 0x001F) == 31) {
+            v &= ~0x001F; // Reset Coarse X to 0
+            v ^= 0x0400;  // Switch horizontal nametable (flip bit 10)
+        }
+        else {
+            v += 1;       // Increment Coarse X
+        }
+    }
+
+    // Increments the vertical position in v
+    void PPU::increment_scroll_y() {
+        if (!rendering_enabled()) return;
+
+        // Fine Y is bits 12-14. If Fine Y < 7, just increment Fine Y
+        if ((v & 0x7000) != 0x7000) {
+            v += 0x1000;
+        }
+        else {
+            v &= ~0x7000; // Reset Fine Y to 0
+
+            // Extract Coarse Y (bits 5-9)
+            int y = (v & 0x03E0) >> 5;
+
+            if (y == 29) {
+                y = 0;        // Reset Coarse Y
+                v ^= 0x0800;  // Switch vertical nametable (flip bit 11)
+            }
+            else if (y == 31) {
+                y = 0;        // Reset Coarse Y, but DO NOT switch nametable (NES hardware quirk)
+            }
+            else {
+                y += 1;       // Increment Coarse Y
+            }
+
+            // Put Coarse Y back into v
+            v = (v & ~0x03E0) | (y << 5);
+        }
+    }
+
+    // Copies horizontal data from t to v
+    void PPU::transfer_address_x() {
+        if (!rendering_enabled()) return;
+        // Copy Nametable X bit and Coarse X bits
+        v = (v & ~0x041F) | (t & 0x041F);
+    }
+
+    // Copies vertical data from t to v
+    void PPU::transfer_address_y() {
+        if (!rendering_enabled()) return;
+        // Copy Fine Y bits, Nametable Y bit, and Coarse Y bits
+        v = (v & ~0x7BE0) | (t & 0x7BE0);
     }
 }

@@ -146,19 +146,9 @@ void console::reset_all() {
 }
 
 const uint32_t* console::framebuffer() const {
-    return framebuffer_data;
+    return ppu.framebuffer_output();
 }
 
 void console::update_framebuffer() {
-    // Placeholder: generate a simple test pattern
-    // This will be replaced when PPU is fully implemented
-    for (int y = 0; y < 240; ++y) {
-        for (int x = 0; x < 256; ++x) {
-            // Create a simple pattern based on CPU state
-            uint8_t r = static_cast<uint8_t>((x + cpu.a()) & 0xFF);
-            uint8_t g = static_cast<uint8_t>((y + cpu.x()) & 0xFF);
-            uint8_t b = static_cast<uint8_t>(cpu.y());
-            framebuffer_data[y * 256 + x] = 0xFF000000 | (r << 16) | (g << 8) | b;
-        }
-    }
+
 }
