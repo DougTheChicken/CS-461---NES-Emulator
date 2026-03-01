@@ -87,7 +87,7 @@ uint16_t CPU::addr_indx() { // indirect, x
 }
 
 uint16_t CPU::addr_indy(bool check_page_cross) { // indirect, y
-    // take byte, add x, and add 0xFF to keep ptr within zero page (prevents wrap bug)
+    // take byte, add y, and add 0xFF to keep ptr within zero page (prevents wrap bug)
     uint8_t ptr = addr_zp();
 
     // read 2 bytes from zero page where ptr is looking
@@ -594,9 +594,22 @@ int CPU::step() {
             break;
         }
 
+        case 0x49: { // EOR #Immediate
+                uint8_t value = fetch8();
+
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 2;
+                break;
+        }
+
         case 0x45: { // EOR zp
             // Fetch the zero-page address and read the value
-            uint8_t zp_addr = fetch8();
+            uint8_t zp_addr = addr_zp();
             uint8_t value = mem->read(zp_addr);
 
             // Perform the bitwise XOR with the Accumulator
@@ -609,9 +622,106 @@ int CPU::step() {
             break;
         }
 
+        case 0x55: { // EOR zp,x
+                uint8_t zp_addr_x = addr_zpx(); // wrap safe helper
+                uint8_t value = mem->read(zp_addr_x);
+
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x4D: { // EOR Absolute
+                uint16_t addr = addr_abs();
+                uint8_t value = mem->read(addr);
+
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x5D: { // EOR Absolute,x
+                uint16_t addr = addr_absx(true);
+                uint8_t value = mem->read(addr);
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x59: { // EOR Absolute,y
+                uint16_t addr = addr_absy(true);
+                uint8_t value = mem->read(addr);
+
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x41: { // EOR (Indirect,x)
+                uint16_t addr = addr_indx(); // helper to (Indirect,x)
+                uint8_t value = mem->read(addr);
+
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 6;
+                break;
+        }
+
+        case 0x51: { // EOR (Indirect),y
+                uint16_t addr = addr_indy(true); // helper to (Indirect),y
+                uint8_t value = mem->read(addr);
+
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 5;
+                break;
+        }
+
+        case 0x29: { // AND #Immediate
+                uint8_t value = fetch8();
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 2;
+                break;
+        }
+
+
         case 0x25: { // AND zp
             // Fetch the zero-page address and read the value
-            uint8_t zp_addr = fetch8();
+            uint8_t zp_addr = addr_zp();
             uint8_t value = mem->read(zp_addr);
 
             // Perform the bitwise AND with the Accumulator
@@ -622,6 +732,90 @@ int CPU::step() {
 
             cycles_until_cpu_boundary += 3;
             break;
+        }
+
+        case 0x35: { // AND Zero Page,X
+                uint8_t zp_addr_x = addr_zpx();
+                uint8_t value = mem->read(zp_addr_x);
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x2D: { // AND Absolute
+                uint16_t abs_addr = addr_abs();
+                uint8_t value = mem->read(abs_addr);
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x3D: { // AND Absolute,X
+                uint16_t abs_addr_x = addr_absx(true);
+                uint8_t value = mem->read(abs_addr_x);
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x39: { // AND Absolute,Y
+                uint16_t abs_addr_y = addr_absy(true);
+                uint8_t value = mem->read(abs_addr_y);
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x21: { // AND (Indirect, X)
+                uint16_t addr = addr_indx();
+                uint8_t value = mem->read(addr);
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 6;
+                break;
+        }
+
+        case 0x31: { // AND (Indirect), Y
+                uint16_t addr = addr_indy(true);
+                uint8_t value = mem->read(addr);
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 5;
+                break;
         }
 
         case 0x86: { // STX zp
