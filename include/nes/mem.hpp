@@ -1,12 +1,14 @@
 #pragma once
 #include <cstdint>
 #include <cstddef>
+#include <memory>
 
 namespace nes {
 
 // forward declarations
 class PPU;
 class APU;
+class Mapper;
 
 class Memory {
 public:
@@ -29,6 +31,9 @@ public:
         controller2 = v;
         if (strobe) controller2_shift = v;
     }
+
+    // allows console to pass mapper to memory bus
+    void set_mapper(std::shared_ptr<Mapper> m);
 
     // Reset memory-mapped state back to a known state (does not modify ROM bytes)
     void reset();
@@ -67,6 +72,8 @@ private:
 
     // Open bus returns whatever was last read successfully
     uint8_t open_bus = 0;
+
+    std::shared_ptr<Mapper> mapper = nullptr;
 };
 
 } // namespace nes

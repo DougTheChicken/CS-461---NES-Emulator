@@ -21,6 +21,14 @@ bool console::load_rom(const char* filepath) {
         return false;
     }
 
+    // attach mapper to memory
+    // allows cpu to use mapper for prg-rom addresses ($8000-$FFFF)
+    mem.set_mapper(rom.get_mapper());
+    mem.map_prg(rom.prg_data(), rom.prg_size_bytes());
+
+    cpu.attach_memory(&mem);
+    ppu.vertical_mirroring = rom.alternate_nametable_layout();
+
     const std::size_t prg_banks = rom.prg_size_bytes() / 16384;
     const std::size_t chr_banks = rom.chr_size_bytes() / 8192;
 
@@ -33,18 +41,24 @@ bool console::load_rom(const char* filepath) {
         rom.prg_size_bytes()
     );
 
-    if (rom.mapper() != 0) {
-        std::fprintf(stderr, "[console] WARNING: Only Mapper 0 (NROM) supported right now.\n");
-    }
+    // uses mapper to translate ppu adresses into chr-rom / ram indices
+    ppu.set_chr_read_callback([this](uint16_t addr) -> uint8_t {
+        uint32_t mapped_addr = 0;
+        // check if active mapper from rom can handle proposed address
+        if (rom.get_mapper()->ppuMapRead(addr, mapped_addr)) {
+            return rom.chr_data()[mapped_addr];
+        }
+        return 0;
+    });
 
-    mem.map_prg(rom.prg_data(), rom.prg_size_bytes());
-    cpu.attach_memory(&mem);
-    ppu.vertical_mirroring = rom.alternate_nametable_layout();
-
-    // TODO: change 0x1FFF bank translation when we implement mapper support
-    ppu.set_chr_read_callback([this](uint16_t addr) -> uint8_t { return rom.chr_data()[addr & 0x1FFF]; });
+    // allows writing to chr-ram if mapper permits
     ppu.set_chr_write_callback([this](uint16_t addr, uint8_t value) {
-        // TODO: when Mapper with chr_write(uint16_t addr, uint8_t value) uncomment mapper->chr_write(addr, value);
+        uint32_t mapped_addr = 0;
+        // check if active mapper from rom can handle proposed address
+        if (rom.get_mapper()->ppuMapWrite(addr, mapped_addr)) {
+            // NOTE: rom.chr_data() returns const uint8_t*, hence the cast
+            const_cast<uint8_t*>(rom.chr_data())[mapped_addr] = value;
+        }
     });
 
 
@@ -138,6 +152,7 @@ void console::reset_all() {
     master_cycle_count = 0;
     cpu.reset();
     rom.reset();
+    mem.set_mapper(nullptr);
     mem.reset();
     ppu.reset();
     apu.reset();

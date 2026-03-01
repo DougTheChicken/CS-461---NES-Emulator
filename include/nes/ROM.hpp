@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <vector>
 #include <string>
+#include <memory>
+#include "mapper/mapper_000.hpp"
 
 // TODO: Make the iNES ROM spec a struct and parse it in a more structured way.
 
@@ -11,6 +13,15 @@ namespace nes {
     public:
         bool load_from_file(const char* path);
         void reset();
+
+        // ---- Mapper Integration ----
+        // getter to provide mapper to console/bus
+        std::shared_ptr<Mapper> get_mapper() const { return mapper_ptr; };
+
+        // returns count of banks needed for mapper constructors
+        uint16_t prg_banks() const { return (uint16_t)PRG_ROM_size; }
+        uint16_t chr_banks() const { return (uint16_t)CHR_ROM_size; }
+        // ----------------------------
 
         std::size_t prg_size_bytes() const { return PRG_ROM_size * 16384u; }
         const uint8_t* prg_data() const { return PRG_data.data(); }
@@ -23,6 +34,9 @@ namespace nes {
 
     private:
         bool parsed = false;
+
+        // pointer to active mapper instance
+        std::shared_ptr<Mapper> mapper_ptr = nullptr;
 
         // Header
         int PRG_ROM_size = 0;   // 16KB units

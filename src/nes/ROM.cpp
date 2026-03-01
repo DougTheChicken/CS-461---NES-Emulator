@@ -72,6 +72,32 @@ namespace nes {
             return false;
         }
 
+        // TODO: handle chr ram case
+        if (CHR_ROM_size == 0) {
+            // allocate 8kb of chr-ram if file has 0 chr-rom banks
+            CHR_data.resize(CHR_BANK_SIZE);
+        }
+
+        // ---- Mapper Handling ----
+
+        switch (mapper_id) {
+            case 0: { // mapper 0
+                // handle if chr bank count is 0
+                uint16_t mapper_chr_banks = (CHR_ROM_size == 0) ? 1 : CHR_ROM_size;
+                // pass info to mapper 0
+                mapper_ptr = std::make_shared<Mapper_000>(PRG_ROM_size, mapper_chr_banks);
+                break;
+            }
+
+            default: { // unsupported mapper
+                // say mapper failed
+                std::fprintf(stderr, "[ROM] Unsupported mapper: %u\n", mapper_id);
+                return false; // fail load
+            }
+        }
+
+        // -------------------------
+
         // Not Implemented:
         // - Read PlayChoice INST-ROM
         // - Read PlayChoice PROM
@@ -82,6 +108,7 @@ namespace nes {
 
     void ROM::reset() {
         this->parsed = false;
+        this->mapper_ptr = nullptr;
         this->PRG_ROM_size = 0;
         this->CHR_ROM_size = 0;
 
