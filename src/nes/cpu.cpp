@@ -672,6 +672,44 @@ int CPU::step() {
                 break;
         }
 
+        // BIT instructions test bits in memory against the accumulator
+        // and sets flags, discarding the result
+        case 0x24: {  // BIT zero page
+                uint8_t addr = fetch8();    // fetch address
+                uint8_t value = mem->read(addr); // read value
+                if ((A & value) == 0) {  P |= Z_FLAG; } else { P &= ~Z_FLAG; }
+
+                // clear prior V and N flags
+                P = (P & ~(N_FLAG | V_FLAG));
+
+                // set V and N based on whatever the memory value had in bits
+                P |= value & V_FLAG;
+                P |= value & N_FLAG;
+
+                cycles_until_cpu_boundary += 3;
+
+                break;
+        }
+
+
+        case 0x2C: {  // BIT Absolute
+                uint16_t addr = fetch16();  // fetch absolute 16-bit address, lo-hi
+                uint8_t value = mem->read(addr); // read value
+                if ((A & value) == 0) {  P |= Z_FLAG; } else { P &= ~Z_FLAG; }
+
+                // clear prior V and N flags
+                P = (P & ~(N_FLAG | V_FLAG));
+
+                // set V and N based on whatever the memory value had in bits
+                P |= value & V_FLAG;
+                P |= value & N_FLAG;
+
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
+
 
         default:
             std::fprintf(stderr,
