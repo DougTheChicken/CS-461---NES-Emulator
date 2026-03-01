@@ -196,6 +196,7 @@ int CPU::step() {
         case 0x78: P |=  I_FLAG; cycles_until_cpu_boundary += 2; break; // SEI
         case 0xB8: P &= ~V_FLAG; cycles_until_cpu_boundary += 2; break; // CLV
         case 0xD8: P &= ~D_FLAG; cycles_until_cpu_boundary += 2; break; // CLD
+        case 0xF8: P |=  D_FLAG; cycles_until_cpu_boundary += 2; break; // SED
 
         // ---- Loads ----
         case 0xA9: { A = fetch8(); setZN(A); cycles_until_cpu_boundary += 2; break; } // LDA #
@@ -524,6 +525,21 @@ int CPU::step() {
             PC = (uint16_t)(((uint16_t)lo | ((uint16_t)hi << 8)) + 1);
             cycles_until_cpu_boundary += 6;
             break;
+        }
+
+        // The JMP instruction has a special indirect addressing mode that can jump to the
+        // address stored in a 16-bit pointer anywhere in memory.
+         case 0x6C: { // JMP indirect
+                uint16_t ptr = fetch16();
+                uint8_t lo = mem->read(ptr);
+
+                // page wrap bug. don't cross the streams...err.. page
+                uint16_t hi_addr = (ptr & 0xFF00) | ((ptr + 1) & 0x00FF);
+                uint8_t hi = mem->read(hi_addr);
+
+                PC = (uint16_t) lo | ((uint16_t)hi << 8);
+                cycles_until_cpu_boundary += 5;
+                break;
         }
 
         // ---- NOP ----
@@ -855,7 +871,8 @@ int CPU::step() {
             P |= I_FLAG;
 
             // load new pc from $FFFE (irq / brk vector)
-            PC = mem->read(0xFFFE);
+            // must be a 16-bit read from $FFFE/$FFFF so OR the lo and hi bytes
+            PC = mem->read(0xFFFE) | ((uint16_t)mem->read(0xFFFF) << 8);
 
             // adjust timing
             cycles_until_cpu_boundary += 7;
