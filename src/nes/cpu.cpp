@@ -416,6 +416,152 @@ int CPU::step() {
             break;
         }
 
+        // ---- Shift ----
+
+        case 0x0A: { // asl accumulator
+            // handle carry flag
+            if (A & 0x80)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // shift accumulator left 1
+            A <<= 1;
+
+            // update flags
+            setZN(A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 2;
+            break;
+        }
+
+        case 0x06: { // asl zero page
+            // fetch address
+            uint8_t addr = fetch8();
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // handle carry flag
+            if (val & 0x80)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // shift bits left 1
+            val <<= 1;
+
+            // write back to memory
+            mem->write(addr, val);
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 5;
+
+            break;
+        }
+
+        // lsr accumulator already handled
+
+        case 0x46: { // lsr zero page
+            // fetch address
+            uint8_t addr = fetch8();
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // handle carry flag
+            if (val & 0x01)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // shift bits right 1
+            val >>= 1;
+
+            // write back to memory
+            mem->write(addr, val);
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 5;
+
+            break;
+        }
+
+        case 0x2A: { // rol accumulator
+            // capture bit
+            uint8_t old_c = (P & C_FLAG) ? 1 : 0;
+
+            // handle carry flag
+            if (A & 0x80)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // rotation for accumulator
+            A = (A << 1) | old_c;
+
+            // update flags
+            setZN(A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 2;
+            break;
+        }
+
+        // rol zero page already handled
+
+        case 0x6A: { // ror accumulator
+            // capture bit
+            uint8_t old_c = (P & C_FLAG) ? 0x80 : 0;
+
+            // handle carry flag
+            if (A & 0x01)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // rotation for accumulator
+            A = (A >> 1) | old_c;
+
+            // update flags
+            setZN(A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 2;
+            break;
+        }
+
+        case 0x66: { // ror zero page
+            // fetch address
+            uint8_t addr = fetch8();
+            // read value
+            uint8_t val = mem->read(addr);
+            // capture bit
+            uint8_t old_c = (P & C_FLAG) ? 0x80 : 0;
+
+            // handle carry flag
+            if (val & 0x01)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // rotation of bits
+            val = (val >> 1) | old_c;
+
+            // write back to memory
+            mem->write(addr, val);
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 5;
+
+            break;
+        }
+
         default:
             std::fprintf(stderr,
                          "[cpu] UNIMPL opcode=%02X at PC=%04X  A=%02X X=%02X Y=%02X P=%02X S=%02X\n",
