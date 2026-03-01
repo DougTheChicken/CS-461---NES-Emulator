@@ -203,14 +203,27 @@ int CPU::step() {
         case 0xAD: { uint16_t a = fetch16(); A = mem->read(a); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA abs
         case 0xA5: { uint8_t zp = fetch8(); A = mem->read(zp); setZN(A); cycles_until_cpu_boundary += 3; break; } // LDA zp
         case 0xB5: { uint8_t zp = fetch8(); A = mem->read((uint8_t)(zp + X)); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA zp,X
-        case 0xBD: { uint16_t a = fetch16(); A = mem->read((uint16_t)(a + X)); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA abs,X
-        case 0xB9: { uint16_t a = fetch16(); A = mem->read((uint16_t)(a + Y)); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA abs,Y
+        case 0xBD: // LDA abs,X
+            {
+                uint16_t a = addr_absx(true);
+                A = mem->read(a);
+                setZN(A);
+                cycles_until_cpu_boundary += 4;
+
+                break;
+            }
+        case 0xB9: // LDA abs,Y
+            {
+                uint16_t a = addr_absy(true);
+                A = mem->read(a);
+                setZN(A);
+                cycles_until_cpu_boundary += 4;
+
+                break;
+            }
         case 0xB1: { // LDA (zp),Y
-            uint8_t zp = fetch8();
-            uint8_t lo = mem->read(zp);
-            uint8_t hi = mem->read((uint8_t)(zp + 1));
-            uint16_t base = (uint16_t)lo | ((uint16_t)hi << 8);
-            A = mem->read((uint16_t)(base + Y));
+            uint16_t addr = addr_indy(true);
+            A = mem->read(addr);
             setZN(A);
             cycles_until_cpu_boundary += 5;
             break;
