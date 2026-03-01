@@ -642,6 +642,32 @@ int CPU::step() {
             break;
         }
 
+        // ---- Interrupts ----
+        case 0x00: { // brk - force interrupt
+            // increment pc by 1 to prevent rti from executing brk in infinite loop
+            PC++;
+
+            // push pc high byte (8-15)
+            push((PC >> 8) & 0xFF);
+            // push pc low byte (0-7)
+            push(PC & 0xFF);
+            // push status reg
+            push(P | B_FLAG | U_FLAG);
+
+            // set i_flag to prevent nesting interrupts
+            P |= I_FLAG;
+
+            // load new pc from $FFFE (irq / brk vector)
+            PC = mem->read(0xFFFE);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 7;
+            
+            break;
+        }
+        
+        // rti already implemented
+
         default:
             std::fprintf(stderr,
                          "[cpu] UNIMPL opcode=%02X at PC=%04X  A=%02X X=%02X Y=%02X P=%02X S=%02X\n",
