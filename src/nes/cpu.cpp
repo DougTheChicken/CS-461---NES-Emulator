@@ -33,6 +33,78 @@ uint8_t CPU::pop() {
     return mem->read((uint16_t)(0x0100 | S));
 }
 
+// ---- addressing mode helpers -----
+uint16_t CPU::addr_abs() { // absolute
+    return fetch16();
+}
+
+uint16_t CPU::addr_zp() { // zero page
+    return fetch8();
+}
+
+uint16_t CPU::addr_zpx() { // zero page, x
+    // zero page indexing needs to wrap within $0000-$00FF
+    return (addr_zp() + X) & 0xFF;
+}
+
+uint16_t CPU::addr_zpy() { // zero page, y
+    // zero page indexing needs to wrap within $0000-$00FF
+    return (addr_zp() + Y) & 0xFF;
+}
+
+uint16_t CPU::addr_absx(bool check_page_cross = false) { // absolute indexed, x
+    uint16_t base = addr_abs();
+    uint16_t addr = base + X;
+
+    // check high byte for changes (handle page crossing)
+    if (check_page_cross && ((base & 0XFF00) != (addr & 0xFF00)))
+        cycles_until_cpu_boundary += 1;
+
+    return addr;
+}
+
+uint16_t CPU::addr_absy(bool check_page_cross = false) { // absolute indexed, y
+    uint16_t base = addr_abs();
+    uint16_t addr = base + Y;
+
+    // check high byte for changes (handle page crossing)
+    if (check_page_cross && ((base & 0XFF00) != (addr & 0xFF00)))
+        cycles_until_cpu_boundary += 1;
+
+    return addr;
+}
+
+uint16_t CPU::addr_indx() { // indirect, x
+    // take byte, add x, and add 0xFF to keep ptr within zero page (prevents wrap bug)
+    uint8_t ptr = (addr_zp() + X) & 0xFF;
+
+    // read 2 bytes from zero page where ptr is looking
+    uint8_t low = mem->read(ptr);
+    uint8_t high = mem->read((ptr + 1) & 0xFF);
+
+    // return address
+    return (high << 8) | low;
+}
+
+uint16_t CPU::addr_indy(bool check_page_cross = false) { // indirect, y
+    // take byte, add x, and add 0xFF to keep ptr within zero page (prevents wrap bug)
+    uint8_t ptr = addr_zp();
+
+    // read 2 bytes from zero page where ptr is looking
+    uint8_t low = mem->read(ptr);
+    uint8_t high = mem->read((ptr + 1) & 0xFF);
+
+    // create base address and add y for final address
+    uint16_t base = (high << 8) | low;
+    uint16_t addr = base + Y;
+
+    // check high byte for changes (handle page crossing)
+    if (check_page_cross && ((base & 0XFF00) != (addr & 0xFF00)))
+        cycles_until_cpu_boundary += 1;
+
+    return addr;
+}
+
 void CPU::init_state() {
     A = X = Y = 0;
     S = 0xFD;
@@ -662,7 +734,7 @@ int CPU::step() {
 
             // adjust timing
             cycles_until_cpu_boundary += 7;
-            
+
             break;
         }
         

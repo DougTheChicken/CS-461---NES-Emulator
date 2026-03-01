@@ -52,6 +52,16 @@ private:
     void push(uint8_t v);
     uint8_t pop();
 
+    // addressing mode helpers
+    uint16_t addr_abs();
+    uint16_t addr_zp();
+    uint16_t addr_zpx();
+    uint16_t addr_zpy();
+    uint16_t addr_absx(bool check_page_cross = false);
+    uint16_t addr_absy(bool check_page_cross = false);
+    uint16_t addr_indx();
+    uint16_t addr_indy(bool check_page_cross = false);
+
     void init_state();
     void setZN(uint8_t v) {
         if (v == 0) P |= Z_FLAG; else P &= ~Z_FLAG;
