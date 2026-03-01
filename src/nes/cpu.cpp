@@ -232,17 +232,142 @@ int CPU::step() {
         case 0x9A: S = X; cycles_until_cpu_boundary += 2; break;           // TXS
         case 0xBA: X = S; setZN(X); cycles_until_cpu_boundary += 2; break; // TSX
 
-        // ---- INC/DEC ----
+        // ---- Increment ----
         case 0xE8: X++; setZN(X); cycles_until_cpu_boundary += 2; break; // INX
         case 0xC8: Y++; setZN(Y); cycles_until_cpu_boundary += 2; break; // INY
-        case 0xCA: X--; setZN(X); cycles_until_cpu_boundary += 2; break; // DEX
-        case 0x88: Y--; setZN(Y); cycles_until_cpu_boundary += 2; break; // DEY
         case 0xE6: { // INC zp
             uint8_t zp = fetch8();
             uint8_t v = (uint8_t)(mem->read(zp) + 1);
             mem->write(zp, v);
             setZN(v);
             cycles_until_cpu_boundary += 5;
+            break;
+        }
+        case 0xF6: { // inc zp, x
+            // grab base address and add x register to byte
+            uint16_t addr = (fetch8() + X) & 0xFF; // can use addr_zpx() instead
+
+            // read value currently stored at addr and increment
+            uint8_t v = mem->read(addr) + 1;
+            // write back to memory
+            mem->write(addr, v);
+
+            // update flags
+            setZN(v);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0xEE: { // inc abs
+            // grab address
+            uint16_t addr = fetch16(); // can use addr_abs() instead
+
+            // read value currently stored at addr and increment
+            uint8_t v = mem->read(addr) + 1;
+            // write back to memory
+            mem->write(addr, v);
+
+            // update flags
+            setZN(v);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0xFE: { // inc abs, x
+            // grab base address and add x register to byte
+            // can use addr_absx() instead
+            uint16_t base = fetch16();
+            uint16_t addr = base + X;
+
+            // read value currently stored at addr and increment
+            uint8_t v = mem->read(addr) + 1;
+            // write back to memory
+            mem->write(addr, v);
+
+            // update flags
+            setZN(v);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 7;
+
+            break;
+        }
+
+        // ---- Decrement ----
+        case 0xCA: X--; setZN(X); cycles_until_cpu_boundary += 2; break; // DEX
+        case 0x88: Y--; setZN(Y); cycles_until_cpu_boundary += 2; break; // DEY
+        case 0xC6: { // dec zp
+            // grab address
+            uint16_t addr = fetch8(); // can use addr_zp() instead
+
+            // read value currently stored at addr and decrement
+            uint8_t v = mem->read(addr) - 1;
+            // write back to memory
+            mem->write(addr, v);
+
+            // update flags
+            setZN(v);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 5;
+
+            break;
+        }
+        case 0xD6: { // dec zp, x
+            // grab base address and add x register to byte
+            uint16_t addr = (fetch8() + X) & 0xFF; // can use addr_zpx() instead
+
+            // read value currently stored at addr and decrement
+            uint8_t v = mem->read(addr) - 1;
+            // write back to memory
+            mem->write(addr, v);
+
+            // update flags
+            setZN(v);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0xCE: { // dec abs
+            // grab address
+            uint16_t addr = fetch16(); // can use addr_abs() instead
+
+            // read value currently stored at addr and decrement
+            uint8_t v = mem->read(addr) - 1;
+            // write back to memory
+            mem->write(addr, v);
+
+            // update flags
+            setZN(v);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0xDE: { // dec abs, x
+            // grab base address and add x register to byte
+            // can use addr_absx() instead
+            uint16_t base = fetch16();
+            uint16_t addr = base + X;
+
+            // read value currently stored at addr and decrement
+            uint8_t v = mem->read(addr) - 1;
+            // write back to memory
+            mem->write(addr, v);
+
+            // update flags
+            setZN(v);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 7;
+
             break;
         }
 
