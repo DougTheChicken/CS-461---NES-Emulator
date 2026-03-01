@@ -209,6 +209,86 @@ int CPU::step() {
             cycles_until_cpu_boundary += 2;
             break;
         }
+        case 0x30: { // bmi rel
+            // fetch offset
+            int8_t off = (int8_t)fetch8();
+            // base timing
+            cycles_until_cpu_boundary += 2;
+
+            // check status and n_flag
+            if (P & N_FLAG) {
+                // execute branch (1 cycle)
+                uint16_t old_pc = PC;
+                PC += off;
+                cycles_until_cpu_boundary += 1;
+                
+                // handle page crossing
+                if ((old_pc & 0xFF00) != (PC & 0xFF00)) // old and new pc are on different pages
+                    cycles_until_cpu_boundary += 1; // takes additional cycle if true
+            }
+
+            break;
+        }
+        case 0x50: { // bvc rel
+            // fetch offset
+            int8_t off = (int8_t)fetch8();
+            // base timing
+            cycles_until_cpu_boundary += 2;
+
+            // check status and v_flag (if overflow flag is clear)
+            if (!(P & V_FLAG)) {
+                // execute branch (1 cycle)
+                uint16_t old_pc = PC;
+                PC += off;
+                cycles_until_cpu_boundary += 1;
+                
+                // handle page crossing
+                if ((old_pc & 0xFF00) != (PC & 0xFF00)) // old and new pc are on different pages
+                    cycles_until_cpu_boundary += 1; // takes additional cycle if true
+            }
+
+            break;
+        }
+        case 0x70: { // bvs rel
+            // fetch offset
+            int8_t off = (int8_t)fetch8();
+            // base timing
+            cycles_until_cpu_boundary += 2;
+
+            // check status and v_flag
+            if ((P & V_FLAG)) {
+                // execute branch (1 cycle)
+                uint16_t old_pc = PC;
+                PC += off;
+                cycles_until_cpu_boundary += 1;
+                
+                // handle page crossing
+                if ((old_pc & 0xFF00) != (PC & 0xFF00)) // old and new pc are on different pages
+                    cycles_until_cpu_boundary += 1; // takes additional cycle if true
+            }
+
+            break;
+        }
+        case 0x90: { // bcc rel
+            // fetch offset
+            int8_t off = (int8_t)fetch8();
+            // base timing
+            cycles_until_cpu_boundary += 2;
+
+            // check status and c_flag (if carry flag is 0)
+            if (!(P & C_FLAG)) {
+                // execute branch (1 cycle)
+                uint16_t old_pc = PC;
+                PC += off;
+                cycles_until_cpu_boundary += 1;
+                
+                // handle page crossing
+                if ((old_pc & 0xFF00) != (PC & 0xFF00)) // old and new pc are on different pages
+                    cycles_until_cpu_boundary += 1; // takes additional cycle if true
+            }
+
+            break;
+        }
         case 0xD0: { // BNE rel
             int8_t off = (int8_t)fetch8();
             bool Z = (P & Z_FLAG) != 0;
