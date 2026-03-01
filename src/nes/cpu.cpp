@@ -75,7 +75,7 @@ uint16_t CPU::addr_absy(bool check_page_cross) { // absolute indexed, y
 }
 
 uint16_t CPU::addr_indx() { // indirect, x
-    // take byte, add x, and add 0xFF to keep ptr within zero page (prevents wrap bug)
+    // take byte, add x, and AND 0xFF to keep ptr within zero page (prevents wrap bug)
     uint8_t ptr = (addr_zp() + X) & 0xFF;
 
     // read 2 bytes from zero page where ptr is looking
@@ -402,11 +402,19 @@ int CPU::step() {
         // ---- Branches ----
         case 0x10: { // BPL rel
             int8_t off = (int8_t)fetch8();
-            bool N = (P & N_FLAG) != 0;
-            if (!N) { PC = (uint16_t)(PC + off); cycles_until_cpu_boundary += 1; }
             cycles_until_cpu_boundary += 2;
+
+            if (!(P & N_FLAG)) {
+                uint16_t old_pc = PC;
+                PC += off;
+                cycles_until_cpu_boundary += 1;
+
+                if ((old_pc & 0xFF00) != (PC & 0xFF00))
+                    cycles_until_cpu_boundary += 1;
+            }
             break;
         }
+
         case 0x30: { // bmi rel
             // fetch offset
             int8_t off = (int8_t)fetch8();
@@ -424,6 +432,7 @@ int CPU::step() {
                 if ((old_pc & 0xFF00) != (PC & 0xFF00)) // old and new pc are on different pages
                     cycles_until_cpu_boundary += 1; // takes additional cycle if true
             }
+
 
             break;
         }
@@ -447,6 +456,7 @@ int CPU::step() {
 
             break;
         }
+
         case 0x70: { // bvs rel
             // fetch offset
             int8_t off = (int8_t)fetch8();
@@ -489,16 +499,31 @@ int CPU::step() {
         }
         case 0xD0: { // BNE rel
             int8_t off = (int8_t)fetch8();
-            bool Z = (P & Z_FLAG) != 0;
-            if (!Z) { PC = (uint16_t)(PC + off); cycles_until_cpu_boundary += 1; }
             cycles_until_cpu_boundary += 2;
+
+            if (!(P & Z_FLAG)) {
+                uint16_t old_pc = PC;
+                PC += off;
+                cycles_until_cpu_boundary += 1;
+
+                if ((old_pc & 0xFF00) != (PC & 0xFF00))
+                    cycles_until_cpu_boundary += 1;
+                }
             break;
         }
         case 0xF0: { // BEQ rel
             int8_t off = (int8_t)fetch8();
-            bool Z = (P & Z_FLAG) != 0;
-            if (Z) { PC = (uint16_t)(PC + off); cycles_until_cpu_boundary += 1; }
             cycles_until_cpu_boundary += 2;
+
+            if (P & Z_FLAG) {
+                uint16_t old_pc = PC;
+                PC += off;
+                cycles_until_cpu_boundary += 1;
+
+                if ((old_pc & 0xFF00) != (PC & 0xFF00))
+                    cycles_until_cpu_boundary += 1;
+            }
+
             break;
         }
 
