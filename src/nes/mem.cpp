@@ -3,11 +3,16 @@
 #include <cstdio>
 #include "nes/apu.hpp"
 #include "nes/ppu.hpp"
+#include "nes/mapper/mapper.hpp"
 
 namespace nes {
 
 Memory::Memory(PPU& ppu_, APU& apu_) : ppu(ppu_), apu(apu_) {
     reset();
+}
+
+void Memory::set_mapper(std::shared_ptr<Mapper> m) {
+    mapper = m;
 }
 
 void Memory::reset() {
@@ -19,6 +24,7 @@ void Memory::reset() {
 	controller1_shift = controller2_shift = 0;
 	strobe = false;
     oam_dma = 0;
+    mapper = nullptr;
     // prg pointer and size are left as-is; console will re-map on ROM load
 }
 
@@ -28,6 +34,14 @@ void Memory::map_prg(const uint8_t* prg_data, std::size_t prg_size) {
 }
 
 uint8_t Memory::read(uint16_t addr) {
+    uint32_t mapped_addr = 0;
+
+    // check mapper for cartridge space (usually $4020-$FFFF)
+    if (mapper && mapper->cpuMapRead(addr, mapped_addr)) {
+        open_bus = prg[mapped_addr];
+        return open_bus;
+    }
+
     // $0000-$1FFF: internal RAM, mirrored every 2KB
     if (addr < 0x2000) {
         open_bus = ram[addr & 0x07FF];
@@ -65,23 +79,24 @@ uint8_t Memory::read(uint16_t addr) {
         if (addr == 0x4015) { open_bus = apu.read_status(); return open_bus; }
     }
 
-    // $8000-$FFFF: PRG ROM
-    if (addr >= 0x8000 && prg && prg_size_bytes) {
-        uint32_t offset = addr - 0x8000;
-        // NROM-128: 16KB mirrored; NROM-256: 32KB direct
-        if (prg_size_bytes == 0x4000) {
-            offset &= 0x3FFF;
-        } else {
-            offset &= (uint32_t)(prg_size_bytes - 1);
-        }
-        open_bus = prg[offset];
-        return open_bus;
-    }
-
     return open_bus;
 }
 
 void Memory::write(uint16_t addr, uint8_t value) {
+    uint32_t mapped_addr = 0;
+
+    // check mapper for cartridge space (usually $4020-$FFFF)
+    if (mapper && mapper->cpuMapWrite(addr, mapped_addr, value)) {
+        // TODO: handle save ram / prg-ram
+        // mapper 0 does not write anything, so this is not currently implemented
+        // if (mapped_addr != 0xFFFFFFFF) {
+        //     prg_ram[mapped_addr] = value;
+        // }
+
+        return;
+    }
+
+    // check mapper for 
     // $0000-$1FFF: internal RAM
     if (addr < 0x2000) {
         ram[addr & 0x07FF] = value;
