@@ -87,7 +87,7 @@ uint16_t CPU::addr_indx() { // indirect, x
 }
 
 uint16_t CPU::addr_indy(bool check_page_cross) { // indirect, y
-    // take byte, add y, and add 0xFF to keep ptr within zero page (prevents wrap bug)
+    // take zero-page pointer, read 2-byte address from it, then add Y to get final address
     uint8_t ptr = addr_zp();
 
     // read 2 bytes from zero page where ptr is looking
@@ -521,7 +521,7 @@ int CPU::step() {
 
                 if ((old_pc & 0xFF00) != (PC & 0xFF00))
                     cycles_until_cpu_boundary += 1;
-                }
+            }
             break;
         }
         case 0xF0: { // BEQ rel
