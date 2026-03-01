@@ -52,7 +52,7 @@ uint16_t CPU::addr_zpy() { // zero page, y
     return (addr_zp() + Y) & 0xFF;
 }
 
-uint16_t CPU::addr_absx(bool check_page_cross = false) { // absolute indexed, x
+uint16_t CPU::addr_absx(bool check_page_cross) { // absolute indexed, x
     uint16_t base = addr_abs();
     uint16_t addr = base + X;
 
@@ -63,7 +63,7 @@ uint16_t CPU::addr_absx(bool check_page_cross = false) { // absolute indexed, x
     return addr;
 }
 
-uint16_t CPU::addr_absy(bool check_page_cross = false) { // absolute indexed, y
+uint16_t CPU::addr_absy(bool check_page_cross) { // absolute indexed, y
     uint16_t base = addr_abs();
     uint16_t addr = base + Y;
 
@@ -86,7 +86,7 @@ uint16_t CPU::addr_indx() { // indirect, x
     return (high << 8) | low;
 }
 
-uint16_t CPU::addr_indy(bool check_page_cross = false) { // indirect, y
+uint16_t CPU::addr_indy(bool check_page_cross) { // indirect, y
     // take byte, add x, and add 0xFF to keep ptr within zero page (prevents wrap bug)
     uint8_t ptr = addr_zp();
 

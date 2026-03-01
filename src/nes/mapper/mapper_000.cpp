@@ -1,4 +1,4 @@
-#include "mapper/mapper_000.hpp"
+#include "nes/mapper/mapper_000.hpp"
 
 namespace nes {
 
