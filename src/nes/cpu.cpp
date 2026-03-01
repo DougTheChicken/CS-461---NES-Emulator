@@ -1076,6 +1076,127 @@ int CPU::step() {
         
         // rti already implemented
 
+        // ORA opcodes
+        case 0x09: {  // ORA #imm
+            uint8_t value = fetch8();
+                A |= value;
+                setZN(A);
+                cycles_until_cpu_boundary += 2;
+
+                break;
+        }
+
+        case 0x05: {  // ORA zero page : fetch value at zero-page address and inclusive OR with accumulator
+                uint8_t addr = addr_zp();  // zero-page address
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR
+                setZN(A);
+                cycles_until_cpu_boundary += 3;
+
+                break;
+        }
+
+         case 0x15: {  // ORA zero page,X : fetch zero-page base address, add x and read, wrapping at 0xFF
+                uint8_t addr = addr_zpx();
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR with A
+                setZN(A);
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
+        case 0x0D: {  // ORA absolute : fetch 16-bit address, read its value and OR with accumulator
+                uint16_t addr = addr_abs();  // absolute 16-bit address, lo-hi
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR with A
+                setZN(A);
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
+        case 0x1D: {  // ORA absolute,X
+                uint16_t addr = addr_absx(true);
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR with A
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
+        case 0x19: {  // ORA absolute,Y
+                uint16_t addr = addr_absy(true);  // absolute 16-bit address
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR with A
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
+        case 0x01: {  // ORA (Indirect,X) :
+                uint16_t addr = addr_indx();
+                uint8_t value = mem->read(addr);
+                A |= value;   // inclusive OR
+                setZN(A);
+                cycles_until_cpu_boundary += 6;
+
+                break;
+        }
+
+        case 0x11: {  // ORA (Indirect,Y) :
+                uint16_t addr_ind_y = addr_indy(true);
+                uint8_t value = mem->read(addr_ind_y);
+                A |= value;   // inclusive OR
+                setZN(A);
+
+                cycles_until_cpu_boundary += 5;
+
+                break;
+        }
+
+        // BIT instructions test bits in memory against the accumulator
+        // and sets flags, discarding the result
+        case 0x24: {  // BIT zero page
+                uint8_t addr = addr_zp();    // fetch address
+                uint8_t value = mem->read(addr); // read value
+                if ((A & value) == 0) {  P |= Z_FLAG; } else { P &= ~Z_FLAG; }
+
+                // clear prior V and N flags
+                P = (P & ~(N_FLAG | V_FLAG));
+
+                // set V and N based on whatever the memory value had in bits
+                P |= value & V_FLAG;
+                P |= value & N_FLAG;
+
+                cycles_until_cpu_boundary += 3;
+
+                break;
+        }
+
+
+        case 0x2C: {  // BIT Absolute
+                uint16_t addr = addr_abs();  // fetch absolute 16-bit address, lo-hi
+                uint8_t value = mem->read(addr); // read value
+                if ((A & value) == 0) {  P |= Z_FLAG; } else { P &= ~Z_FLAG; }
+
+                // clear prior V and N flags
+                P = (P & ~(N_FLAG | V_FLAG));
+
+                // set V and N based on whatever the memory value had in bits
+                P |= value & V_FLAG;
+                P |= value & N_FLAG;
+
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
+
         default:
             std::fprintf(stderr,
                          "[cpu] UNIMPL opcode=%02X at PC=%04X  A=%02X X=%02X Y=%02X P=%02X S=%02X\n",
