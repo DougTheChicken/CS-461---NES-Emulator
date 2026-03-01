@@ -562,6 +562,117 @@ int CPU::step() {
             break;
         }
 
+        // ORA opcodes
+        case 0x90: {  // ORA #imm
+            uint8_t value = fetch8();
+                A |= value;
+                setZN(A);
+                cycles_until_cpu_boundary += 2;
+
+                break;
+        }
+
+        case 0x05: {  // ORA zero page : fetch value at zero-page address and inclusive OR with accumulator
+                uint8_t addr = fetch8();  // zero-page address
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR
+                setZN(A);
+                cycles_until_cpu_boundary += 3;
+
+                break;
+        }
+
+         case 0x15: {  // ORA zero page,X : fetch zero-page base address, add x and read, wrapping at 0xFF
+                uint8_t addr = fetch8();  // zero-page base address
+                addr = static_cast<uint8_t>(addr + X);
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR with A
+                setZN(A);
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
+
+        case 0x0D: {  // ORA absolute : fetch 16-bit address, read its value and OR with accumulator
+                uint16_t addr = fetch16();  // absolute 16-bit address, lo-hi
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR with A
+                setZN(A);
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
+
+        case 0x1D: {  // ORA absolute,X
+                uint16_t base = fetch16();  // absolute 16-bit address
+                uint16_t addr = static_cast<uint16_t>(base + X); // add X offset
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR with A
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+
+                // oops check by comparing high bytes
+                bool page_cross = (base & 0xFF00) != ((base + X) & 0xFF00);
+
+                if ( page_cross ) cycles_until_cpu_boundary += 1;
+
+                break;
+        }
+
+
+        case 0x19: {  // ORA absolute,Y
+                uint16_t base = fetch16();  // absolute 16-bit address
+                uint16_t addr = static_cast<uint16_t>(base + Y); // add & offset
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR with A
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+
+                // oops check by comparing high bytes
+                if ( (base & 0xFF00) != (addr & 0xFF00) ) cycles_until_cpu_boundary += 1;
+
+                break;
+        }
+
+
+        case 0x01: {  // ORA (Indirect,X) :
+                uint8_t base = fetch8();  // zero-page base address
+                uint8_t ptr = static_cast<uint8_t>(base + X);  // wrap zero page
+                uint8_t lo = mem->read(ptr); // read lo value
+                uint8_t hi = mem->read(static_cast<uint8_t>(ptr + 1)); // wrap zero page to read hi value
+                uint16_t addr = (static_cast<uint16_t>(hi) << 8) | lo;
+                uint8_t value = mem->read(addr);
+                A |= value;   // inclusive OR
+                setZN(A);
+                cycles_until_cpu_boundary += 6;
+
+                break;
+        }
+
+
+        case 0x11: {  // ORA (Indirect,Y) :
+                uint8_t zero_page = fetch8();  // zero-page pointer location
+                uint8_t lo = mem->read(zero_page);  // read whatever's at zero page
+                uint8_t hi = mem->read(static_cast<uint8_t>(zero_page + 1)); // wrap zero page to read hi value
+                uint16_t base = (static_cast<uint16_t>(hi) << 8) | lo;
+                uint16_t addr = static_cast<uint16_t>(base + Y);
+                uint8_t value = mem->read(addr);
+                A |= value;   // inclusive OR
+                setZN(A);
+
+                cycles_until_cpu_boundary += 5;
+
+                // oops check by comparing high bytes
+                if ( (base & 0xFF00) != (addr & 0xFF00) ) cycles_until_cpu_boundary += 1;
+
+                break;
+        }
+
+
         default:
             std::fprintf(stderr,
                          "[cpu] UNIMPL opcode=%02X at PC=%04X  A=%02X X=%02X Y=%02X P=%02X S=%02X\n",
