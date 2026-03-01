@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <string>
 #include "nes/timing.hpp"
+#include "nes/ppu.hpp"
 
 namespace nes {
 

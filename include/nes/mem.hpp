@@ -33,6 +33,9 @@ public:
     // Reset memory-mapped state back to a known state (does not modify ROM bytes)
     void reset();
 
+    // getter for use within cpu
+    PPU& get_ppu() { return ppu; }
+
 private:
     // Internal RAM ($0000-$07FF), mirrored to $1FFF
     uint8_t ram[0x800]{};

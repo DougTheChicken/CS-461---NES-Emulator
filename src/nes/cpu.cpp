@@ -61,6 +61,9 @@ void CPU::init_state() {
     uint8_t lo = mem->read(0xFFFA);
     uint8_t hi = mem->read(0xFFFB);
     PC = (uint16_t)lo | ((uint16_t)hi << 8);
+    
+    // add 7 cycles to ensure cpu and ppu stay in sync
+    cycles_until_cpu_boundary += 7;
 }
 
     void CPU::irq() {
@@ -92,6 +95,13 @@ void CPU::step_to(cycle_t ppu_target) {
 
 int CPU::step() {
     if (!mem) return 0;
+
+    if (mem->get_ppu().nmi_pending) {
+        // acknowledge the interrupt
+        mem->get_ppu().nmi_pending = false;
+        // execute the nmi sequence
+        nmi();
+    }
 
     int cycles_before = cycles_until_cpu_boundary;
 
