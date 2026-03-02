@@ -661,6 +661,7 @@ void APU::step()
         pulse2.clock_timer();
         noise.clock_timer();
         dmc.clock_timer();
+        dmc.clock_memory_reader();
     }
 }
 

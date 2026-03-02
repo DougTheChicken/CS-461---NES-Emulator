@@ -235,6 +235,7 @@ class DeltaModulationChannel {
 public:
     void write_register(uint8_t reg, uint8_t value);
     void clock_timer();
+    void clock_memory_reader();
     uint8_t output() const;
     void reset();
 
@@ -281,7 +282,7 @@ private:
 
     bool fetch_sample_byte();
     void clock_output_unit();
-    void clock_memory_reader();
+
 
     // Compute the CPU address from the raw $4012 value.
     static uint16_t decode_address(uint8_t raw) {
