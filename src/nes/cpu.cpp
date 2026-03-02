@@ -199,19 +199,117 @@ int CPU::step() {
         case 0xF8: P |=  D_FLAG; cycles_until_cpu_boundary += 2; break; // SED
 
         // ---- Loads ----
-        case 0xA9: { A = fetch8(); setZN(A); cycles_until_cpu_boundary += 2; break; } // LDA #
-        case 0xAD: { uint16_t a = fetch16(); A = mem->read(a); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA abs
-        case 0xA5: { uint8_t zp = fetch8(); A = mem->read(zp); setZN(A); cycles_until_cpu_boundary += 3; break; } // LDA zp
-        case 0xB5: { uint8_t zp = fetch8(); A = mem->read((uint8_t)(zp + X)); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA zp,X
-        case 0xBD: // LDA abs,X
-            {
-                uint16_t a = addr_absx(true);
-                A = mem->read(a);
-                setZN(A);
-                cycles_until_cpu_boundary += 4;
+        case 0xA0: { Y = fetch8(); setZN(Y); cycles_until_cpu_boundary += 2; break; } // LDY #
+        case 0xA1: { // lda indx
+            // grab indexed, x address
+            uint16_t addr = addr_indx();
+            // write value from address to accumulator
+            A = mem->read(addr);
 
-                break;
-            }
+            // update flags
+            setZN(A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0xA2: { X = fetch8(); setZN(X); cycles_until_cpu_boundary += 2; break; } // LDX #
+        case 0xA4: { // ldy zp
+            // grab zero page address
+            uint16_t zp = addr_zp();
+            // write value from address to y register
+            Y = mem->read(zp);
+
+            // update flags
+            setZN(Y);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 3;
+
+            break;
+        }
+        case 0xA5: { uint8_t zp = fetch8(); A = mem->read(zp); setZN(A); cycles_until_cpu_boundary += 3; break; } // LDA zp
+        case 0xA6: { // ldx zp
+            // grab zero page address
+            uint16_t zp = addr_zp();
+            // write value from address to x register
+            X = mem->read(zp);
+
+            // update flags
+            setZN(X);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 3;
+
+            break;
+        }
+        case 0xA9: { A = fetch8(); setZN(A); cycles_until_cpu_boundary += 2; break; } // LDA #
+        case 0xAC: { // ldy abs
+            // grab absolute address
+            uint16_t addr = addr_abs();
+            // write value from address to y register
+            Y = mem->read(addr);
+
+            // update flags
+            setZN(Y);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xAD: { uint16_t a = fetch16(); A = mem->read(a); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA abs
+        case 0xAE: { // ldx abs
+            // grab absolute address
+            uint16_t addr = addr_abs();
+            // write value from address to x register
+            X = mem->read(addr);
+
+            // update flags
+            setZN(X);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+            
+            break;
+        }
+        case 0xB1: { // LDA (zp),Y
+            uint16_t addr = addr_indy(true);
+            A = mem->read(addr);
+            setZN(A);
+            cycles_until_cpu_boundary += 5;
+            break;
+        }
+        case 0xB4: { // ldy zp, x
+            // grab zero page, x address
+            uint16_t addr = addr_zpx();
+            // write value from address to y register
+            Y = mem->read(addr);
+
+            // update flags
+            setZN(Y);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xB5: { uint8_t zp = fetch8(); A = mem->read((uint8_t)(zp + X)); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA zp,X
+        case 0xB6: { // ldx zp, y
+            // grab zero page, y
+            uint16_t zp = addr_zpy();
+            // write value from zero page to x register
+            X = mem->read(zp);
+
+            // update flags
+            setZN(X);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+            
+            break;
+        }
         case 0xB9: // LDA abs,Y
             {
                 uint16_t a = addr_absy(true);
@@ -221,16 +319,43 @@ int CPU::step() {
 
                 break;
             }
-        case 0xB1: { // LDA (zp),Y
-            uint16_t addr = addr_indy(true);
-            A = mem->read(addr);
-            setZN(A);
-            cycles_until_cpu_boundary += 5;
+        case 0xBC: { // ldy abs, x
+            // grab absolute, x address
+            uint16_t addr = addr_absx(true);
+            // write value from address to y register
+            Y = mem->read(addr);
+
+            // update flags
+            setZN(Y);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
             break;
         }
+        case 0xBD: // LDA abs,X
+            {
+                uint16_t a = addr_absx(true);
+                A = mem->read(a);
+                setZN(A);
+                cycles_until_cpu_boundary += 4;
 
-        case 0xA2: { X = fetch8(); setZN(X); cycles_until_cpu_boundary += 2; break; } // LDX #
-        case 0xA0: { Y = fetch8(); setZN(Y); cycles_until_cpu_boundary += 2; break; } // LDY #
+                break;
+            }
+        case 0xBE: { // ldx abs, y
+            // grab absolute, y address
+            uint16_t addr = addr_absy(true);
+            // write value from address to x register
+            X = mem->read(addr);
+
+            // update flags
+            setZN(X);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+            
+            break;
+        }
 
         // ---- Stores ----
         case 0x8D: { uint16_t a = fetch16(); mem->write(a, A); cycles_until_cpu_boundary += 4; break; } // STA abs
