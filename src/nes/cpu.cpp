@@ -358,10 +358,98 @@ int CPU::step() {
         }
 
         // ---- Stores ----
-        case 0x8D: { uint16_t a = fetch16(); mem->write(a, A); cycles_until_cpu_boundary += 4; break; } // STA abs
+        case 0x81:{ // sta ind, x
+            // fetch indirect x address
+            uint16_t addr = addr_indx();
+            // store value in accumulator
+            mem->write(addr, A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0x84:{ // sty zp
+            // fetch zero page address
+            uint16_t zp = addr_zp();
+            // store value at y register
+            mem->write(zp, Y);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 3;
+
+            break;
+        }
         case 0x85: { uint8_t zp = fetch8(); mem->write(zp, A); cycles_until_cpu_boundary += 3; break; } // STA zp
-        case 0x8E: { uint16_t a = fetch16(); mem->write(a, X); cycles_until_cpu_boundary += 4; break; } // STX abs
         case 0x8C: { uint16_t a = fetch16(); mem->write(a, Y); cycles_until_cpu_boundary += 4; break; } // STY abs
+        case 0x8D: { uint16_t a = fetch16(); mem->write(a, A); cycles_until_cpu_boundary += 4; break; } // STA abs
+        case 0x8E: { uint16_t a = fetch16(); mem->write(a, X); cycles_until_cpu_boundary += 4; break; } // STX abs
+        case 0x91:{ // sta ind, y
+            // fetch indirect y address
+            uint16_t addr = addr_indy(false);
+            // store value in accumulator
+            mem->write(addr, A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0x94:{ // sty zp, x
+            // fetch zero page, x address
+            uint16_t addr = addr_zpx();
+            // store value at y register
+            mem->write(addr, Y);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0x95:{ // sta zp, x
+            // fetch zero page, x address
+            uint16_t addr = addr_zpx();
+            // store value in accumulator
+            mem->write(addr, A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0x96:{ // stx zp, y
+            // fetch zero page, y address
+            uint16_t addr = addr_zpy();
+            // store value at x register
+            mem->write(addr, X);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0x99:{ // sta abs, y
+            // fetch absolute, y address
+            uint16_t addr = addr_absy(false);
+            // store value in accumulator
+            mem->write(addr, A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 5;
+
+            break;
+        }
+        case 0x9D:{ // sta abs, x
+            // fetch absolute, x address
+            uint16_t addr = addr_absx(false);
+            // store value in accumulator
+            mem->write(addr, A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 5;
+
+            break;
+        }
 
         // ---- Transfers ----
         case 0xAA: X = A; setZN(X); cycles_until_cpu_boundary += 2; break; // TAX
