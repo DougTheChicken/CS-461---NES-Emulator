@@ -28,6 +28,8 @@ public:
     void step_cpu_cycles(unsigned long long cpu_cycles);
     int step_instruction();
 
+    nes::Memory& get_mem()  { return mem ;}
+
 private:
     void update_framebuffer();
 

@@ -94,6 +94,65 @@ namespace ui {
             return false;
         }
     }
+
+    void process_input(sf::Event& event, console& emu) {
+        // check if event is a keyboard event
+        if (event.type != sf::Event::KeyPressed && event.type != sf::Event::KeyReleased)
+            return;
+        
+        // is key pressed
+        bool pressed = (event.type == sf::Event::KeyPressed);
+        // temp container for nes button bit
+        uint8_t mask = 0;
+
+        // map of nes controller bits
+        switch (event.key.code) {
+            case sf::Keyboard::Z: {
+                mask = A;
+                break;
+            }
+            case sf::Keyboard::X: {
+                mask = B;
+                break;
+            }
+            case sf::Keyboard::RShift: {
+                mask = SELECT;
+                break;
+            }
+            case sf::Keyboard::Enter: {
+                mask = START;
+                break;
+            }
+            case sf::Keyboard::Up: {
+                mask = UP;
+                break;
+            }
+            case sf::Keyboard::Down: {
+                mask = DOWN;
+                break;
+            }
+            case sf::Keyboard::Left: {
+                mask = LEFT;
+                break;
+            }
+            case sf::Keyboard::Right: {
+                mask = RIGHT;
+                break;
+            }
+            default:
+                return; // not a gameplay key
+        }
+
+        // check if a key is pressed
+        if (pressed) {
+            emu.get_mem().set_controller1(emu.get_mem().get_controller1() | mask);
+            // console output
+            std::printf("Button Pressed: %02X | Current State: %02X\n", mask, emu.get_mem().get_controller1());
+        }
+        else {
+            emu.get_mem().set_controller1(emu.get_mem().get_controller1() & ~mask);
+        }
+    }
     
     bool step(console& emu, bool& is_running) {
         if (!::g_window || !::g_window->isOpen()) {
@@ -103,6 +162,9 @@ namespace ui {
         // Process events
         sf::Event event;
         while (::g_window->pollEvent(event)) {
+            // call controller
+            process_input(event, emu);
+
             if (event.type == sf::Event::Closed) {
                 is_running = false;
                 ::g_window->close();
