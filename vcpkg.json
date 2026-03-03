@@ -1,0 +1,19 @@
+{
+  "name": "nes-emulator",
+  "version": "0.1.0",
+  "dependencies": [
+    "sdl2",
+    "gtest",
+    {
+      "name": "sfml",
+      "version>=": "2.5.1"
+    }
+  ],
+  "overrides": [
+    {
+      "name": "sfml",
+      "version": "2.5.1#14"
+    }
+  ],
+  "builtin-baseline": "3426db05b996481ca31e95fff3734cf23e0f51bc"
+}

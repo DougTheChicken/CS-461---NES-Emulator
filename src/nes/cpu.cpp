@@ -75,7 +75,7 @@ uint16_t CPU::addr_absy(bool check_page_cross) { // absolute indexed, y
 }
 
 uint16_t CPU::addr_indx() { // indirect, x
-    // take byte, add x, and add 0xFF to keep ptr within zero page (prevents wrap bug)
+    // take byte, add x, and AND 0xFF to keep ptr within zero page (prevents wrap bug)
     uint8_t ptr = (addr_zp() + X) & 0xFF;
 
     // read 2 bytes from zero page where ptr is looking
@@ -87,7 +87,7 @@ uint16_t CPU::addr_indx() { // indirect, x
 }
 
 uint16_t CPU::addr_indy(bool check_page_cross) { // indirect, y
-    // take byte, add x, and add 0xFF to keep ptr within zero page (prevents wrap bug)
+    // take zero-page pointer, read 2-byte address from it, then add Y to get final address
     uint8_t ptr = addr_zp();
 
     // read 2 bytes from zero page where ptr is looking
@@ -196,33 +196,260 @@ int CPU::step() {
         case 0x78: P |=  I_FLAG; cycles_until_cpu_boundary += 2; break; // SEI
         case 0xB8: P &= ~V_FLAG; cycles_until_cpu_boundary += 2; break; // CLV
         case 0xD8: P &= ~D_FLAG; cycles_until_cpu_boundary += 2; break; // CLD
+        case 0xF8: P |=  D_FLAG; cycles_until_cpu_boundary += 2; break; // SED
 
         // ---- Loads ----
-        case 0xA9: { A = fetch8(); setZN(A); cycles_until_cpu_boundary += 2; break; } // LDA #
-        case 0xAD: { uint16_t a = fetch16(); A = mem->read(a); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA abs
+        case 0xA0: { Y = fetch8(); setZN(Y); cycles_until_cpu_boundary += 2; break; } // LDY #
+        case 0xA1: { // lda indx
+            // grab indexed, x address
+            uint16_t addr = addr_indx();
+            // write value from address to accumulator
+            A = mem->read(addr);
+
+            // update flags
+            setZN(A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0xA2: { X = fetch8(); setZN(X); cycles_until_cpu_boundary += 2; break; } // LDX #
+        case 0xA4: { // ldy zp
+            // grab zero page address
+            uint16_t zp = addr_zp();
+            // write value from address to y register
+            Y = mem->read(zp);
+
+            // update flags
+            setZN(Y);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 3;
+
+            break;
+        }
         case 0xA5: { uint8_t zp = fetch8(); A = mem->read(zp); setZN(A); cycles_until_cpu_boundary += 3; break; } // LDA zp
-        case 0xB5: { uint8_t zp = fetch8(); A = mem->read((uint8_t)(zp + X)); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA zp,X
-        case 0xBD: { uint16_t a = fetch16(); A = mem->read((uint16_t)(a + X)); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA abs,X
-        case 0xB9: { uint16_t a = fetch16(); A = mem->read((uint16_t)(a + Y)); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA abs,Y
+        case 0xA6: { // ldx zp
+            // grab zero page address
+            uint16_t zp = addr_zp();
+            // write value from address to x register
+            X = mem->read(zp);
+
+            // update flags
+            setZN(X);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 3;
+
+            break;
+        }
+        case 0xA9: { A = fetch8(); setZN(A); cycles_until_cpu_boundary += 2; break; } // LDA #
+        case 0xAC: { // ldy abs
+            // grab absolute address
+            uint16_t addr = addr_abs();
+            // write value from address to y register
+            Y = mem->read(addr);
+
+            // update flags
+            setZN(Y);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xAD: { uint16_t a = fetch16(); A = mem->read(a); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA abs
+        case 0xAE: { // ldx abs
+            // grab absolute address
+            uint16_t addr = addr_abs();
+            // write value from address to x register
+            X = mem->read(addr);
+
+            // update flags
+            setZN(X);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+            
+            break;
+        }
         case 0xB1: { // LDA (zp),Y
-            uint8_t zp = fetch8();
-            uint8_t lo = mem->read(zp);
-            uint8_t hi = mem->read((uint8_t)(zp + 1));
-            uint16_t base = (uint16_t)lo | ((uint16_t)hi << 8);
-            A = mem->read((uint16_t)(base + Y));
+            uint16_t addr = addr_indy(true);
+            A = mem->read(addr);
             setZN(A);
             cycles_until_cpu_boundary += 5;
             break;
         }
+        case 0xB4: { // ldy zp, x
+            // grab zero page, x address
+            uint16_t addr = addr_zpx();
+            // write value from address to y register
+            Y = mem->read(addr);
 
-        case 0xA2: { X = fetch8(); setZN(X); cycles_until_cpu_boundary += 2; break; } // LDX #
-        case 0xA0: { Y = fetch8(); setZN(Y); cycles_until_cpu_boundary += 2; break; } // LDY #
+            // update flags
+            setZN(Y);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xB5: { uint8_t zp = fetch8(); A = mem->read((uint8_t)(zp + X)); setZN(A); cycles_until_cpu_boundary += 4; break; } // LDA zp,X
+        case 0xB6: { // ldx zp, y
+            // grab zero page, y
+            uint16_t zp = addr_zpy();
+            // write value from zero page to x register
+            X = mem->read(zp);
+
+            // update flags
+            setZN(X);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+            
+            break;
+        }
+        case 0xB9: // LDA abs,Y
+            {
+                uint16_t a = addr_absy(true);
+                A = mem->read(a);
+                setZN(A);
+                cycles_until_cpu_boundary += 4;
+
+                break;
+            }
+        case 0xBC: { // ldy abs, x
+            // grab absolute, x address
+            uint16_t addr = addr_absx(true);
+            // write value from address to y register
+            Y = mem->read(addr);
+
+            // update flags
+            setZN(Y);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xBD: // LDA abs,X
+            {
+                uint16_t a = addr_absx(true);
+                A = mem->read(a);
+                setZN(A);
+                cycles_until_cpu_boundary += 4;
+
+                break;
+            }
+        case 0xBE: { // ldx abs, y
+            // grab absolute, y address
+            uint16_t addr = addr_absy(true);
+            // write value from address to x register
+            X = mem->read(addr);
+
+            // update flags
+            setZN(X);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+            
+            break;
+        }
 
         // ---- Stores ----
-        case 0x8D: { uint16_t a = fetch16(); mem->write(a, A); cycles_until_cpu_boundary += 4; break; } // STA abs
+        case 0x81:{ // sta ind, x
+            // fetch indirect x address
+            uint16_t addr = addr_indx();
+            // store value in accumulator
+            mem->write(addr, A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0x84:{ // sty zp
+            // fetch zero page address
+            uint16_t zp = addr_zp();
+            // store value at y register
+            mem->write(zp, Y);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 3;
+
+            break;
+        }
         case 0x85: { uint8_t zp = fetch8(); mem->write(zp, A); cycles_until_cpu_boundary += 3; break; } // STA zp
-        case 0x8E: { uint16_t a = fetch16(); mem->write(a, X); cycles_until_cpu_boundary += 4; break; } // STX abs
         case 0x8C: { uint16_t a = fetch16(); mem->write(a, Y); cycles_until_cpu_boundary += 4; break; } // STY abs
+        case 0x8D: { uint16_t a = fetch16(); mem->write(a, A); cycles_until_cpu_boundary += 4; break; } // STA abs
+        case 0x8E: { uint16_t a = fetch16(); mem->write(a, X); cycles_until_cpu_boundary += 4; break; } // STX abs
+        case 0x91:{ // sta ind, y
+            // fetch indirect y address
+            uint16_t addr = addr_indy(false);
+            // store value in accumulator
+            mem->write(addr, A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0x94:{ // sty zp, x
+            // fetch zero page, x address
+            uint16_t addr = addr_zpx();
+            // store value at y register
+            mem->write(addr, Y);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0x95:{ // sta zp, x
+            // fetch zero page, x address
+            uint16_t addr = addr_zpx();
+            // store value in accumulator
+            mem->write(addr, A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0x96:{ // stx zp, y
+            // fetch zero page, y address
+            uint16_t addr = addr_zpy();
+            // store value at x register
+            mem->write(addr, X);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0x99:{ // sta abs, y
+            // fetch absolute, y address
+            uint16_t addr = addr_absy(false);
+            // store value in accumulator
+            mem->write(addr, A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 5;
+
+            break;
+        }
+        case 0x9D:{ // sta abs, x
+            // fetch absolute, x address
+            uint16_t addr = addr_absx(false);
+            // store value in accumulator
+            mem->write(addr, A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 5;
+
+            break;
+        }
 
         // ---- Transfers ----
         case 0xAA: X = A; setZN(X); cycles_until_cpu_boundary += 2; break; // TAX
@@ -372,6 +599,69 @@ int CPU::step() {
         }
 
         // ---- Compare ----
+        case 0xC0: { // cpy #
+            uint8_t v = fetch8();
+            // compare y register to what's in memory
+            uint16_t r = (uint16_t)Y - (uint16_t)v;
+
+            // handle carry flag
+            if (Y >= v)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // update flags
+            setZN((uint8_t)r);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 2;
+
+            break;
+        }
+        case 0xC1: { // cmp indx
+            // grab address
+            uint16_t addr = addr_indx();
+            // grab value at address
+            uint8_t v = mem->read(addr);
+            // compare accumulator to what's in memory
+            uint16_t r = (uint16_t)A - (uint16_t)v;
+
+            // handle carry flag
+            if (A >= v)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // update flags
+            setZN((uint8_t)r);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0xC4: { // cpy zp
+            // grab address
+            uint16_t addr = addr_zp();
+            // grab value at address
+            uint8_t v = mem->read(addr);
+            // compare y register to what's in memory
+            uint16_t r = (uint16_t)Y - (uint16_t)v;
+
+            // handle carry flag
+            if (Y >= v)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // update flags
+            setZN((uint8_t)r);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 3;
+
+            break;
+        }
         case 0xC9: { // CMP #
             uint8_t v = fetch8();
             uint16_t r = (uint16_t)A - (uint16_t)v;
@@ -389,6 +679,138 @@ int CPU::step() {
             cycles_until_cpu_boundary += 3;
             break;
         }
+        case 0xCC: { // cpy abs
+            // grab address
+            uint16_t addr = addr_abs();
+            // grab value at address
+            uint8_t v = mem->read(addr);
+            // compare y register to what's in memory
+            uint16_t r = (uint16_t)Y - (uint16_t)v;
+
+            // handle carry flag
+            if (Y >= v)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // update flags
+            setZN((uint8_t)r);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xCD: { // cmp abs
+            // grab address
+            uint16_t addr = addr_abs();
+            // grab value at address
+            uint8_t v = mem->read(addr);
+            // compare accumulator to what's in memory
+            uint16_t r = (uint16_t)A - (uint16_t)v;
+
+            // handle carry flag
+            if (A >= v)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // update flags
+            setZN((uint8_t)r);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xD1: { // cmp indy
+            // grab address
+            uint16_t addr = addr_indy(true);
+            // grab value at address
+            uint8_t v = mem->read(addr);
+            // compare accumulator to what's in memory
+            uint16_t r = (uint16_t)A - (uint16_t)v;
+
+            // handle carry flag
+            if (A >= v)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // update flags
+            setZN((uint8_t)r);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 5;
+
+            break;
+        }
+        case 0xD5: { // cmp zp, x
+            // grab address
+            uint16_t addr = addr_zpx();
+            // grab value at address
+            uint8_t v = mem->read(addr);
+            // compare accumulator to what's in memory
+            uint16_t r = (uint16_t)A - (uint16_t)v;
+
+            // handle carry flag
+            if (A >= v)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // update flags
+            setZN((uint8_t)r);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xD9: { // cmp abs, y
+            // grab address
+            uint16_t addr = addr_absy(true);
+            // grab value at address
+            uint8_t v = mem->read(addr);
+            // compare accumulator to what's in memory
+            uint16_t r = (uint16_t)A - (uint16_t)v;
+
+            // handle carry flag
+            if (A >= v)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // update flags
+            setZN((uint8_t)r);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xDD: { // cmp abs, x
+            // grab address
+            uint16_t addr = addr_absx(true);
+            // grab value at address
+            uint8_t v = mem->read(addr);
+            // compare accumulator to what's in memory
+            uint16_t r = (uint16_t)A - (uint16_t)v;
+
+            // handle carry flag
+            if (A >= v)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // update flags
+            setZN((uint8_t)r);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
         case 0xE0: { // CPX #
             uint8_t v = fetch8();
             uint16_t r = (uint16_t)X - (uint16_t)v;
@@ -397,15 +819,67 @@ int CPU::step() {
             cycles_until_cpu_boundary += 2;
             break;
         }
+        case 0xE4: { // cpx zp
+            // grab address
+            uint16_t addr = addr_zp();
+            // grab value at address
+            uint8_t v = mem->read(addr);
+            // compare x register to what's in memory
+            uint16_t r = (uint16_t)X - (uint16_t)v;
+
+            // handle carry flag
+            if (X >= v)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // update flags
+            setZN((uint8_t)r);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 3;
+
+            break;
+        }
+        case 0xEC: { // cpx abs
+            // grab address
+            uint16_t addr = addr_abs();
+            // grab value at address
+            uint8_t v = mem->read(addr);
+            // compare x register to what's in memory
+            uint16_t r = (uint16_t)X - (uint16_t)v;
+
+            // handle carry flag
+            if (X >= v)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // update flags
+            setZN((uint8_t)r);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
 
         // ---- Branches ----
         case 0x10: { // BPL rel
             int8_t off = (int8_t)fetch8();
-            bool N = (P & N_FLAG) != 0;
-            if (!N) { PC = (uint16_t)(PC + off); cycles_until_cpu_boundary += 1; }
             cycles_until_cpu_boundary += 2;
+
+            if (!(P & N_FLAG)) {
+                uint16_t old_pc = PC;
+                PC += off;
+                cycles_until_cpu_boundary += 1;
+
+                if ((old_pc & 0xFF00) != (PC & 0xFF00))
+                    cycles_until_cpu_boundary += 1;
+            }
             break;
         }
+
         case 0x30: { // bmi rel
             // fetch offset
             int8_t off = (int8_t)fetch8();
@@ -423,6 +897,7 @@ int CPU::step() {
                 if ((old_pc & 0xFF00) != (PC & 0xFF00)) // old and new pc are on different pages
                     cycles_until_cpu_boundary += 1; // takes additional cycle if true
             }
+
 
             break;
         }
@@ -446,6 +921,7 @@ int CPU::step() {
 
             break;
         }
+
         case 0x70: { // bvs rel
             // fetch offset
             int8_t off = (int8_t)fetch8();
@@ -488,16 +964,31 @@ int CPU::step() {
         }
         case 0xD0: { // BNE rel
             int8_t off = (int8_t)fetch8();
-            bool Z = (P & Z_FLAG) != 0;
-            if (!Z) { PC = (uint16_t)(PC + off); cycles_until_cpu_boundary += 1; }
             cycles_until_cpu_boundary += 2;
+
+            if (!(P & Z_FLAG)) {
+                uint16_t old_pc = PC;
+                PC += off;
+                cycles_until_cpu_boundary += 1;
+
+                if ((old_pc & 0xFF00) != (PC & 0xFF00))
+                    cycles_until_cpu_boundary += 1;
+            }
             break;
         }
         case 0xF0: { // BEQ rel
             int8_t off = (int8_t)fetch8();
-            bool Z = (P & Z_FLAG) != 0;
-            if (Z) { PC = (uint16_t)(PC + off); cycles_until_cpu_boundary += 1; }
             cycles_until_cpu_boundary += 2;
+
+            if (P & Z_FLAG) {
+                uint16_t old_pc = PC;
+                PC += off;
+                cycles_until_cpu_boundary += 1;
+
+                if ((old_pc & 0xFF00) != (PC & 0xFF00))
+                    cycles_until_cpu_boundary += 1;
+            }
+
             break;
         }
 
@@ -524,6 +1015,21 @@ int CPU::step() {
             PC = (uint16_t)(((uint16_t)lo | ((uint16_t)hi << 8)) + 1);
             cycles_until_cpu_boundary += 6;
             break;
+        }
+
+        // The JMP instruction has a special indirect addressing mode that can jump to the
+        // address stored in a 16-bit pointer anywhere in memory.
+         case 0x6C: { // JMP indirect
+                uint16_t ptr = fetch16();
+                uint8_t lo = mem->read(ptr);
+
+                // page wrap bug. don't cross the streams...err.. page
+                uint16_t hi_addr = (ptr & 0xFF00) | ((ptr + 1) & 0x00FF);
+                uint8_t hi = mem->read(hi_addr);
+
+                PC = (uint16_t) lo | ((uint16_t)hi << 8);
+                cycles_until_cpu_boundary += 5;
+                break;
         }
 
         // ---- NOP ----
@@ -578,9 +1084,22 @@ int CPU::step() {
             break;
         }
 
+        case 0x49: { // EOR #Immediate
+                uint8_t value = fetch8();
+
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 2;
+                break;
+        }
+
         case 0x45: { // EOR zp
             // Fetch the zero-page address and read the value
-            uint8_t zp_addr = fetch8();
+            uint8_t zp_addr = addr_zp();
             uint8_t value = mem->read(zp_addr);
 
             // Perform the bitwise XOR with the Accumulator
@@ -593,9 +1112,106 @@ int CPU::step() {
             break;
         }
 
+        case 0x55: { // EOR zp,x
+                uint8_t zp_addr_x = addr_zpx(); // wrap safe helper
+                uint8_t value = mem->read(zp_addr_x);
+
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x4D: { // EOR Absolute
+                uint16_t addr = addr_abs();
+                uint8_t value = mem->read(addr);
+
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x5D: { // EOR Absolute,x
+                uint16_t addr = addr_absx(true);
+                uint8_t value = mem->read(addr);
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x59: { // EOR Absolute,y
+                uint16_t addr = addr_absy(true);
+                uint8_t value = mem->read(addr);
+
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x41: { // EOR (Indirect,x)
+                uint16_t addr = addr_indx(); // helper to (Indirect,x)
+                uint8_t value = mem->read(addr);
+
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 6;
+                break;
+        }
+
+        case 0x51: { // EOR (Indirect),y
+                uint16_t addr = addr_indy(true); // helper to (Indirect),y
+                uint8_t value = mem->read(addr);
+
+                // Perform the bitwise XOR with the Accumulator
+                A ^= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 5;
+                break;
+        }
+
+        case 0x29: { // AND #Immediate
+                uint8_t value = fetch8();
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 2;
+                break;
+        }
+
+
         case 0x25: { // AND zp
             // Fetch the zero-page address and read the value
-            uint8_t zp_addr = fetch8();
+            uint8_t zp_addr = addr_zp();
             uint8_t value = mem->read(zp_addr);
 
             // Perform the bitwise AND with the Accumulator
@@ -606,6 +1222,90 @@ int CPU::step() {
 
             cycles_until_cpu_boundary += 3;
             break;
+        }
+
+        case 0x35: { // AND Zero Page,X
+                uint8_t zp_addr_x = addr_zpx();
+                uint8_t value = mem->read(zp_addr_x);
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x2D: { // AND Absolute
+                uint16_t abs_addr = addr_abs();
+                uint8_t value = mem->read(abs_addr);
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x3D: { // AND Absolute,X
+                uint16_t abs_addr_x = addr_absx(true);
+                uint8_t value = mem->read(abs_addr_x);
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x39: { // AND Absolute,Y
+                uint16_t abs_addr_y = addr_absy(true);
+                uint8_t value = mem->read(abs_addr_y);
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+                break;
+        }
+
+        case 0x21: { // AND (Indirect, X)
+                uint16_t addr = addr_indx();
+                uint8_t value = mem->read(addr);
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 6;
+                break;
+        }
+
+        case 0x31: { // AND (Indirect), Y
+                uint16_t addr = addr_indy(true);
+                uint8_t value = mem->read(addr);
+
+                // Perform the bitwise AND with the Accumulator
+                A &= value;
+
+                // Update the Zero and Negative flags based on the new Accumulator value
+                setZN(A);
+
+                cycles_until_cpu_boundary += 5;
+                break;
         }
 
         case 0x86: { // STX zp
@@ -695,27 +1395,9 @@ int CPU::step() {
 
         // ---- Shift ----
 
-        case 0x0A: { // asl accumulator
-            // handle carry flag
-            if (A & 0x80)
-                P |= C_FLAG;
-            else
-                P &= ~C_FLAG;
-
-            // shift accumulator left 1
-            A <<= 1;
-
-            // update flags
-            setZN(A);
-
-            // adjust timing
-            cycles_until_cpu_boundary += 2;
-            break;
-        }
-
         case 0x06: { // asl zero page
-            // fetch address
-            uint8_t addr = fetch8();
+            // fetch zero page address
+            uint16_t addr = addr_zp();
             // read value
             uint8_t val = mem->read(addr);
 
@@ -738,12 +1420,202 @@ int CPU::step() {
 
             break;
         }
+        case 0x0A: { // asl accumulator
+            // handle carry flag
+            if (A & 0x80)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
 
-        // lsr accumulator already handled
+            // shift accumulator left 1
+            A <<= 1;
 
+            // update flags
+            setZN(A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 2;
+            break;
+        }
+        case 0x0E: { // asl absolute
+            // fetch absolute address
+            uint16_t addr = addr_abs();
+            // read value from address
+            uint8_t val = mem->read(addr);
+
+            // handle carry flag
+            if (val & 0x80)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+            
+            // shift bits left 1
+            val <<= 1;
+            // write value back to address
+            mem->write(addr, val);
+
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0x16: { // asl zero page, x
+            // fetch zero page, x address
+            uint16_t addr = addr_zpx();
+            // read value from address
+            uint8_t val = mem->read(addr);
+
+            // handle carry flag
+            if (val & 0x80)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+            
+            // shift bits left 1
+            val <<= 1;
+            // write value back to address
+            mem->write(addr, val);
+
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0x1E: { // asl absolute, x
+            // fetch absolute, x address
+            uint16_t addr = addr_absx(false);
+            // read value from address
+            uint8_t val = mem->read(addr);
+
+            // handle carry flag
+            if (val & 0x80)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+            
+            // shift bits left 1
+            val <<= 1;
+            // write value back to address
+            mem->write(addr, val);
+
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 7;
+
+            break;
+        }
+        case 0x2A: { // rol accumulator
+            // capture bit
+            uint8_t old_c = (P & C_FLAG) ? 1 : 0;
+
+            // handle carry flag
+            if (A & 0x80)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // rotation for accumulator
+            A = (A << 1) | old_c;
+
+            // update flags
+            setZN(A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 2;
+            break;
+        }
+        case 0x2E: { // rol absolute
+            // fetch absolute address
+            uint16_t addr = addr_abs();
+            // read value from address
+            uint8_t val = mem->read(addr);
+            // capture bit
+            uint8_t old_c = (P & C_FLAG) ? 1 : 0;
+
+            // handle carry flag
+            if (val & 0x80)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // rotation of bits
+            val = (val << 1) | old_c;
+            // write value back to address
+            mem->write(addr, val);
+
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0x36: { // rol zero page, x
+            // fetch zero page, x address
+            uint16_t addr = addr_zpx();
+            // read value from address
+            uint8_t val = mem->read(addr);
+            // capture bit
+            uint8_t old_c = (P & C_FLAG) ? 1 : 0;
+
+            // handle carry flag
+            if (val & 0x80)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // rotation of bits
+            val = (val << 1) | old_c;
+            // write value back to address
+            mem->write(addr, val);
+
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0x3E: { // rol absolute, x
+            // fetch absolute,x address
+            uint16_t addr = addr_absx(false);
+            // read value from address
+            uint8_t val = mem->read(addr);
+            // capture bit
+            uint8_t old_c = (P & C_FLAG) ? 1 : 0;
+
+            // handle carry flag
+            if (val & 0x80)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // rotation of bits
+            val = (val << 1) | old_c;
+            // write value back to address
+            mem->write(addr, val);
+
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 7;
+
+            break;
+        }
         case 0x46: { // lsr zero page
-            // fetch address
-            uint8_t addr = fetch8();
+            // fetch zero page address
+            uint16_t addr = addr_zp();
             // read value
             uint8_t val = mem->read(addr);
 
@@ -766,54 +1638,84 @@ int CPU::step() {
 
             break;
         }
-
-        case 0x2A: { // rol accumulator
-            // capture bit
-            uint8_t old_c = (P & C_FLAG) ? 1 : 0;
+        case 0x4E: { // lsr absolute
+            // fetch absolute address
+            uint16_t addr = addr_abs();
+            // read value
+            uint8_t val = mem->read(addr);
 
             // handle carry flag
-            if (A & 0x80)
+            if (val & 0x01)
                 P |= C_FLAG;
             else
                 P &= ~C_FLAG;
 
-            // rotation for accumulator
-            A = (A << 1) | old_c;
+            // shift bits right 1
+            val >>= 1;
+            // write back to memory
+            mem->write(addr, val);
 
             // update flags
-            setZN(A);
+            setZN(val);
 
             // adjust timing
-            cycles_until_cpu_boundary += 2;
+            cycles_until_cpu_boundary += 6;
+
             break;
         }
-
-        // rol zero page already handled
-
-        case 0x6A: { // ror accumulator
-            // capture bit
-            uint8_t old_c = (P & C_FLAG) ? 0x80 : 0;
+        case 0x56: { // lsr zero page, x
+            // fetch zero page, x address
+            uint16_t addr = addr_zpx();
+            // read value from address
+            uint8_t val = mem->read(addr);
 
             // handle carry flag
-            if (A & 0x01)
+            if (val & 0x01)
                 P |= C_FLAG;
             else
                 P &= ~C_FLAG;
 
-            // rotation for accumulator
-            A = (A >> 1) | old_c;
+            // shift bits right 1
+            val >>= 1;
+            // write value back to address
+            mem->write(addr, val);
 
             // update flags
-            setZN(A);
+            setZN(val);
 
             // adjust timing
-            cycles_until_cpu_boundary += 2;
+            cycles_until_cpu_boundary += 6;
+
             break;
         }
+        case 0x5E: { // lsr absolute, x
+            // fetch absolute, x address
+            uint16_t addr = addr_absx(false);
+            // read value from address
+            uint8_t val = mem->read(addr);
 
+            // handle carry flag
+            if (val & 0x01)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // shift bits right 1
+            val >>= 1;
+            // write value back to address
+            mem->write(addr, val);
+
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 7;
+
+            break;
+        }
         case 0x66: { // ror zero page
-            // fetch address
-            uint8_t addr = fetch8();
+            // fetch zero page address
+            uint16_t addr = addr_zp();
             // read value
             uint8_t val = mem->read(addr);
             // capture bit
@@ -838,6 +1740,107 @@ int CPU::step() {
 
             break;
         }
+        case 0x6A: { // ror accumulator
+            // capture bit
+            uint8_t old_c = (P & C_FLAG) ? 0x80 : 0;
+
+            // handle carry flag
+            if (A & 0x01)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // rotation for accumulator
+            A = (A >> 1) | old_c;
+
+            // update flags
+            setZN(A);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 2;
+            break;
+        }
+        case 0x6E: { // ror absolute
+            // fetch absolute address
+            uint16_t addr = addr_abs();
+            // read value from address
+            uint8_t val = mem->read(addr);
+            // capture bit
+            uint8_t old_c = (P & C_FLAG) ? 0x80 : 0;
+
+            // handle carry flag
+            if (val & 0x01)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // rotation of bits
+            val = (val >> 1) | old_c;
+            // write value back to address
+            mem->write(addr, val);
+
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0x76: { // ror zero page, x
+            // fetch zero page, x address
+            uint16_t addr = addr_zpx();
+            // read value from address
+            uint8_t val = mem->read(addr);
+            // capture bit
+            uint8_t old_c = (P & C_FLAG) ? 0x80 : 0;
+
+            // handle carry flag
+            if (val & 0x01)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // rotation of bits
+            val = (val >> 1) | old_c;
+            // write value back to address
+            mem->write(addr, val);
+
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0x7E: { // ror absolute, x
+            // fetch absolute, x address
+            uint16_t addr = addr_absx(false);
+            // read value from address
+            uint8_t val = mem->read(addr);
+            // capture bit
+            uint8_t old_c = (P & C_FLAG) ? 0x80 : 0;
+
+            // handle carry flag
+            if (val & 0x01)
+                P |= C_FLAG;
+            else
+                P &= ~C_FLAG;
+
+            // rotation of bits
+            val = (val >> 1) | old_c;
+            // write value back to address
+            mem->write(addr, val);
+
+            // update flags
+            setZN(val);
+
+            // adjust timing
+            cycles_until_cpu_boundary += 7;
+
+            break;
+        }
 
         // ---- Interrupts ----
         case 0x00: { // brk - force interrupt
@@ -855,7 +1858,8 @@ int CPU::step() {
             P |= I_FLAG;
 
             // load new pc from $FFFE (irq / brk vector)
-            PC = mem->read(0xFFFE);
+            // must be a 16-bit read from $FFFE/$FFFF so OR the lo and hi bytes
+            PC = mem->read(0xFFFE) | ((uint16_t)mem->read(0xFFFF) << 8);
 
             // adjust timing
             cycles_until_cpu_boundary += 7;
@@ -864,6 +1868,127 @@ int CPU::step() {
         }
         
         // rti already implemented
+
+        // ORA opcodes
+        case 0x09: {  // ORA #imm
+            uint8_t value = fetch8();
+                A |= value;
+                setZN(A);
+                cycles_until_cpu_boundary += 2;
+
+                break;
+        }
+
+        case 0x05: {  // ORA zero page : fetch value at zero-page address and inclusive OR with accumulator
+                uint8_t addr = addr_zp();  // zero-page address
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR
+                setZN(A);
+                cycles_until_cpu_boundary += 3;
+
+                break;
+        }
+
+         case 0x15: {  // ORA zero page,X : fetch zero-page base address, add x and read, wrapping at 0xFF
+                uint8_t addr = addr_zpx();
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR with A
+                setZN(A);
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
+        case 0x0D: {  // ORA absolute : fetch 16-bit address, read its value and OR with accumulator
+                uint16_t addr = addr_abs();  // absolute 16-bit address, lo-hi
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR with A
+                setZN(A);
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
+        case 0x1D: {  // ORA absolute,X
+                uint16_t addr = addr_absx(true);
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR with A
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
+        case 0x19: {  // ORA absolute,Y
+                uint16_t addr = addr_absy(true);  // absolute 16-bit address
+                uint8_t value = mem->read(addr); // read value
+                A |= value;   // inclusive OR with A
+                setZN(A);
+
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
+        case 0x01: {  // ORA (Indirect,X) :
+                uint16_t addr = addr_indx();
+                uint8_t value = mem->read(addr);
+                A |= value;   // inclusive OR
+                setZN(A);
+                cycles_until_cpu_boundary += 6;
+
+                break;
+        }
+
+        case 0x11: {  // ORA (Indirect,Y) :
+                uint16_t addr_ind_y = addr_indy(true);
+                uint8_t value = mem->read(addr_ind_y);
+                A |= value;   // inclusive OR
+                setZN(A);
+
+                cycles_until_cpu_boundary += 5;
+
+                break;
+        }
+
+        // BIT instructions test bits in memory against the accumulator
+        // and sets flags, discarding the result
+        case 0x24: {  // BIT zero page
+                uint8_t addr = addr_zp();    // fetch address
+                uint8_t value = mem->read(addr); // read value
+                if ((A & value) == 0) {  P |= Z_FLAG; } else { P &= ~Z_FLAG; }
+
+                // clear prior V and N flags
+                P = (P & ~(N_FLAG | V_FLAG));
+
+                // set V and N based on whatever the memory value had in bits
+                P |= value & V_FLAG;
+                P |= value & N_FLAG;
+
+                cycles_until_cpu_boundary += 3;
+
+                break;
+        }
+
+
+        case 0x2C: {  // BIT Absolute
+                uint16_t addr = addr_abs();  // fetch absolute 16-bit address, lo-hi
+                uint8_t value = mem->read(addr); // read value
+                if ((A & value) == 0) {  P |= Z_FLAG; } else { P &= ~Z_FLAG; }
+
+                // clear prior V and N flags
+                P = (P & ~(N_FLAG | V_FLAG));
+
+                // set V and N based on whatever the memory value had in bits
+                P |= value & V_FLAG;
+                P |= value & N_FLAG;
+
+                cycles_until_cpu_boundary += 4;
+
+                break;
+        }
+
 
         default:
             std::fprintf(stderr,

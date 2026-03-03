@@ -76,11 +76,68 @@ namespace nes {
         if (timing.is_visible_scanline() && timing.is_visible_cycle()) {
             uint32_t final_pixel_color = 0xFF000000; // Default to black
 
-            if (background_rendering_flag) {
+            if (background_rendering_flag)
+            {
                 uint8_t bg_pixel = bg.get_pixel();
                 uint16_t palette_addr = 0x3F00 + bg_pixel;
                 uint8_t nes_color_index = ppu_bus_read(palette_addr) & 0x3F;
                 final_pixel_color = NES_SYSTEM_PALETTE[nes_color_index];
+
+                // Sprite 0 hit is detected when the first sprite overlaps a
+                // non-transparent background pixel during rendering.
+                // from https://www.nesdev.org/wiki/PPU_registers#Sprite_0_hit_flag
+                // and https://www.nesdev.org/wiki/PPU_rendering#Visible_scanlines_(0-239)
+                // sprite zero hit detection against non-transparent bg pixel
+                // only happens during visible scanlines so background draws first
+                // and sprite 0 draws on top, but if both pixels are opaque, set the flag
+                if (!sprite_zero_hit_flag && sprite_rendering_flag) {
+                    if (sprites.secondary_count > 0 && sprites.is_sprite_zero(0)) {
+                        uint8_t spr_pixel = sprites.get_pixel(0);
+                        uint8_t bg_bits = bg_pixel & 0x03;
+                        int x_coord = timing.cycle() - 1;
+
+                        if (spr_pixel != 0 && bg_bits != 0 && x_coord != 255) {
+                            // no hit in leftmost 8 pixels if either clipping flag is clear
+                            if (x_coord >= 8 || (leftmost_background_flag && leftmost_sprite_flag)) {
+                                sprite_zero_hit_flag = true;
+                            }
+                        }
+                    }
+                }
+
+                // time to figure out what the color of this visible pixel by evaluating all the sprites
+                // against the background to find the first foreground sprite that's not tansparent and then
+                // set this pixel to that color. if we have no such sprites, use the bg_pixel's color because
+                // there are no sprites that are eclipsing the background.
+                if (sprite_rendering_flag) {
+                    // loop over all sprites (up to 32 in secondary_count)
+                    for (int i = 0; i < sprites.secondary_count; i++) {
+                        // skip sprites that we haven't gotten to yet on this scanline (they are to the right)
+                        if (sprites.spr_x[i] != 0) continue;
+
+                        // get current sprites bits from the shift register
+                        uint8_t spr_pixel = sprites.get_pixel(i);
+
+                        // but skip transparent pixels
+                        if (spr_pixel == 0) continue;
+
+                        // bit 5 tells us if sprite is foreground or behind background
+                        bool behind_bg = (sprites.spr_attr[i] & 0x20) != 0;
+
+                        // lookup sprite palette set our pixel's color
+                        uint8_t palette_index = (sprites.spr_attr[i] & 0x03);
+                        uint16_t palette_addr = 0x3F10 + (palette_index * 4) + spr_pixel;
+                        uint8_t nes_color_index = ppu_bus_read(palette_addr) & 0x3F;
+
+                        // draw sprite if it's in front, or if background pixel is transparent
+                        uint8_t bg_bits = bg_pixel & 0x03;
+                        if (!behind_bg || bg_bits == 0) {
+                            final_pixel_color = NES_SYSTEM_PALETTE[nes_color_index];
+                        }
+                        break; // the first non-transparent sprite wins the my-pixel-is-front game.
+                        // we still exit here if the current sprite is behind the background. that's how NES does it.
+                    }
+                }
             }
 
             int x_coord = timing.cycle() - 1;
@@ -129,17 +186,26 @@ namespace nes {
         // ========================================================
         // 3. SPRITE EVALUATION
         // ========================================================
-        if (timing.is_visible_scanline()) {
+        if (timing.is_visible_scanline())
+        {
             if (timing.is_start_of_scanline()) {
                 sprites.begin_scanline(timing.scanline());
             }
             else if (timing.is_sprite_clear_cycle()) {
                 sprites.clear(timing.cycle());
             }
-            else if (timing.is_sprite_evaluation_cycle()) {
+            else if (timing.is_sprite_evaluation_cycle())
+            {
                 sprites.evaluate(timing.scanline(), timing.cycle());
+
+                if (timing.cycle() == 256 && timing.is_visible_scanline())
+                {
+                    if (sprites.overflow())
+                        sprite_overflow_flag = true;
+                }
             }
-            else if (timing.is_sprite_fetch_cycle()) {
+            else if (timing.is_sprite_fetch_cycle())
+            {
                 sprites.fetch(timing.scanline(), timing.cycle());
             }
         }
@@ -281,6 +347,11 @@ namespace nes {
                 sprite_size_flag                        = (value & 0x20) != 0;
                 ppu_master_slave_flag                   = (value & 0x40) != 0;
                 vblank_nmi_flag                         = (value & 0x80) != 0;
+
+                // from: https://www.nesdev.org/wiki/NMI#Operation
+                // NMI edge detect: if vblank is active and NMI enable just turned on, fire immediately
+                if (vblank_nmi_flag && vblank_flag)
+                    nmi_pending = true;
 
                 // temp vram t bits 11-10 are for nametable select and come from PPUCTRL 1-0
                 t = (t & 0xF3FF) | ((value & 0x03) << 10);
@@ -614,6 +685,22 @@ namespace nes {
         overflow_ = false;
     }
 
+    // https://www.nesdev.org/wiki/PPU_rendering#Drawing_overview
+    void SpritePipeline::tick()
+    {
+        // for each active sprite
+        for (int i = 0; i < secondary_count; i++) {
+            // if its x counter is still counting down, decrement it
+            if (spr_x[i] > 0) {
+                spr_x[i]--;
+            } else {
+                // once it hits 0 shart shifting the pattern data
+                spr_shift_low[i]  <<= 1;
+                spr_shift_high[i] <<= 1;
+            }
+        }
+    }
+
     // clear 1 byte of secondary oam
     void SpritePipeline::clear(int cycle)
     {
@@ -630,6 +717,17 @@ namespace nes {
     {
         int sprite_height = ppu.sprite_size_flag ? 16 : 8;
         return (scanline >= top) && (scanline < top + sprite_height);
+    }
+
+    bool SpritePipeline::is_sprite_zero(int index) {
+        return spr_oam_index[index] == 0;
+    }
+
+    // get a sprite's pixel bits in lohi order to check for 0 hit
+    uint8_t SpritePipeline::get_pixel(int index) {
+        uint8_t lo = (spr_shift_low[index]  & 0x80) ? 1 : 0;
+        uint8_t hi = (spr_shift_high[index] & 0x80) ? 2 : 0;
+        return lo | hi;
     }
 
     // there are 64 sprites, each is 4-bytes: x, tile, attr, y
