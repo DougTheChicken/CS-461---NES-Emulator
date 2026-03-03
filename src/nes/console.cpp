@@ -107,6 +107,12 @@ void console::step(cycle_t stepcount) {
         for (int i = 0; i < CPU_TO_PPU; i++) { ppu.step(); }
         apu.step(); // step one APU to one CPU here. APU handles its own timing
 
+        // skip cpu execution for however many stall cycles are pending
+        while (apu.dmc.pending_stall_cycles > 0 && master_cycle_count < target) {
+            master_cycle_count++;
+            apu.dmc.pending_stall_cycles--;
+        }
+
         // check NMI and IRQ
         if (ppu.nmi_pending) {
             ppu.nmi_pending = false;
