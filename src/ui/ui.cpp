@@ -181,7 +181,20 @@ namespace ui {
                 }
             }
         }
-        
+
+        uint8_t buttons = 0;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) buttons |= 0x80;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))  buttons |= 0x40;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down))  buttons |= 0x20;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))    buttons |= 0x10;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Return)) buttons |= 0x08; // Start
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) buttons |= 0x04; // Select
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Z))     buttons |= 0x02;  // B
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::X))     buttons |= 0x01;  // A
+        emu.set_controller1(buttons);
+
+        // TODO: map some buttons to controller2
+
         // Update texture from framebuffer
         const uint32_t* framebuffer = emu.framebuffer();
         ::g_texture.update((const uint8_t*)framebuffer);
