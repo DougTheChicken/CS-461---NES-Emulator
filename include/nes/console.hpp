@@ -28,6 +28,8 @@ public:
     void step_cpu_cycles(unsigned long long cpu_cycles);
     int step_instruction();
 
+    void set_controller1(uint8_t buttons) { mem.set_controller1(buttons); }
+    void set_controller2(uint8_t buttons) { mem.set_controller2(buttons); }
     nes::Memory& get_mem()  { return mem ;}
 
 private:
