@@ -41,6 +41,10 @@ public:
     // getter for use within cpu
     PPU& get_ppu() { return ppu; }
 
+    // getters
+    uint8_t get_controller1() const { return controller1; }
+    uint8_t get_controller2() const { return controller2; }
+
 private:
     // Internal RAM ($0000-$07FF), mirrored to $1FFF
     uint8_t ram[0x800]{};
