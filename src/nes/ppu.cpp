@@ -64,6 +64,17 @@ namespace nes {
         }
 
         if (timing.is_vblank_end()) {
+            static int frames = 0;
+            if (frames < 580) {
+                for (int i = 0; i < 32; i++) {
+                    std::printf("%02X%s",
+                        palette_ram[i] & 0x3F,
+                        (i % 16 == 15) ? "\n" : " ");
+                }
+                std::printf("\n");
+            }
+            frames++;
+
             vblank_flag = false;
             nmi_pending = false;
             sprite_zero_hit_flag = false;
@@ -184,7 +195,7 @@ namespace nes {
                     increment_scroll_y();
                 }
                 if (timing.cycle() == 257) {
-                    bg.reload();
+                    // bg.reload(); // this might cause double reload per scanline?
                     transfer_address_x();
                 }
             }
@@ -874,11 +885,15 @@ namespace nes {
         // 0..7 for 8x8 or 0..15 for 8x16
         int fine_y = scanline - ((int) y + 1);
 
+        // making sure we always are in range to avoid glitches
+        if (fine_y < 0) fine_y = 0;
+        if (fine_y >= sprite_height) fine_y = sprite_height - 1;
+
         // Vertical flip? (attr bit 7)
         if (attr & 0x80)
             fine_y = (sprite_height - 1) - fine_y;  // takes a fine_y of 0 1 2 3 4 ... and turns it into ... 4 3 2 1 0
 
-        if (!ppu.sprite_size_flag) // 8x16 when set
+        if (!ppu.sprite_size_flag) // 8x8 when clear
         {
             // from https://www.nesdev.org/wiki/PPU_programmer_reference#PPUCTRL_-_Miscellaneous_settings_($2000_write)
             // in 8x8, sprite_pattern_table_address_flag (0: $0000; 1: $1000; ignored in 8x16 mode)
