@@ -1,5 +1,9 @@
 #pragma once
 #include <cstdint>
+#include <cstddef>
+#include <deque>
+#include <mutex>
+#include "nes/timing.hpp"
 
 namespace nes {
 
@@ -314,6 +318,11 @@ public:
     // Mixed audio output (0.0 – ~1.0)
     float get_output() const;
 
+    // Drain up to `count` PCM samples (int16, mono, 44100 Hz) that were
+    // collected during step().  Returns the number of samples actually written
+    // Thread-safe btw so may be called from the audio callback thread.
+    size_t drain_samples(int16_t* out, size_t count);
+
     // Channels (public for test / debug access)
     PulseChannel          pulse1{true};
     PulseChannel          pulse2{false};
@@ -338,6 +347,23 @@ private:
 
     float get_pulse_output() const;
     float get_tnd_output() const;
+
+    // Sample accumulation: one PCM sample is pushed per ~40.58 CPU cycles
+    // so that the audio stream can drain at 44100 Hz.
+    // Use the precise clock from timing.hpp (MASTER_HZ/12 = 1,789,772.6̄ Hz)
+    // rather than the rounded integer 1789773, so the generated sample rate
+    // exactly matches the NES hardware frequency and avoids a systematic
+    // pitch bias.
+    static constexpr double NES_CPU_FREQ      = CPU_HZ;  // 21477272/12 = 1789772.6̄ Hz
+    static constexpr double AUDIO_SAMPLE_RATE = 44100.0;
+    static constexpr double CYCLES_PER_SAMPLE = NES_CPU_FREQ / AUDIO_SAMPLE_RATE;
+    // Cap the queue at 1 second to avoid unbounded growth when the audio thread falls behind (e.g. window minimised).
+    // (very bad, horrid bugs and potential memory leaks)
+    static constexpr size_t MAX_QUEUED_SAMPLES = static_cast<size_t>(AUDIO_SAMPLE_RATE);
+
+    double                m_sample_accumulator = 0.0;
+    std::deque<int16_t>   m_sample_queue;
+    mutable std::mutex    m_sample_mutex;
 
     uint64_t cpu_cycle     = 0;
     uint8_t  status_enable = 0;

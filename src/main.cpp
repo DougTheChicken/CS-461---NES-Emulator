@@ -1,4 +1,5 @@
 #include "nes/console.hpp"
+#include "nes/timing.hpp"
 #include "ui/ui.hpp"
 #include <cstdio>
 
@@ -26,13 +27,23 @@ int main(int argc, char** argv) {
 
     // Main loop
     std::fprintf(stderr, "Entering UI loop (press ESC to exit, SPACE to pause/run)\n");
-    
+
+    // Use a fractional accumulator so we step exactly the right number of CPU cycles per frame on average.
+    // this fixes a systematic timing bias that would otherwise cause the generated audio sample rate to be slightly off
+    // (e.g. 44100.8 Hz instead of 44100 Hz)
+    // this fixes one of the most annoying bugs I have seen where the audio is just *slightly* wrong
+    // I knew I wasn't crazy...
+    double cycle_accumulator = 0.0;
+    constexpr double CYCLES_PER_FRAME = CPU_HZ / 60.0; // ~29829.54...
+
     while (ui::step(emu, is_running)) {
-        // If emulator is running, step forward
-        // NES runs at ~1.79 MHz, so we step by a small amount per frame
-        // At 60 FPS, that's ~29830 cycles per frame
         if (is_running) {
-            emu.step(29830);
+            // Step the emulator by the appropriate number of CPU cycles for one frame
+            // (using a fractional accumulator to avoid systematic timing bias)
+            cycle_accumulator += CYCLES_PER_FRAME;
+            auto cycles = static_cast<cycle_t>(cycle_accumulator);
+            cycle_accumulator -= static_cast<double>(cycles);
+            emu.step(cycles);
         }
     }
 

@@ -22,11 +22,9 @@ class AudioStream : public sf::SoundStream {
         console& m_emu;
         std::vector<int16_t> m_buffer;
         unsigned int m_sampleRate;
-        unsigned int m_samplesGenerated;
-        
-        // Timing: NES runs at ~1.789773 MHz, we need to generate audio samples
-        // at a fixed rate (e.g., 44.1 kHz)
-        float m_cpuCyclesToSamples; // conversion factor (perhaps this should be calculated once based on sample rate?)
-        unsigned long long m_lastCpuCycle;
+
+        // When the APU queue runs dry we repeat the last sample rather than
+        // emitting a click.  This avoids a harsh pop on underrun.
+        int16_t m_lastSample = 0;
     };
 }

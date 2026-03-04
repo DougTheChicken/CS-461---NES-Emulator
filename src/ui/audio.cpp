@@ -1,69 +1,54 @@
 #include "ui/audio.hpp"
 #include "nes/console.hpp"
-#include <cmath>
 
 namespace ui {
 
-    AudioStream::AudioStream(console& emu): m_emu(emu), m_sampleRate(44100), m_samplesGenerated(0), m_cpuCyclesToSamples(0.0f), m_lastCpuCycle(0) {
+    AudioStream::AudioStream(console& emu)
+        : m_emu(emu), m_sampleRate(44100), m_lastSample(0)
+    {
         m_buffer.reserve(4096);
     }
 
-    AudioStream::~AudioStream() {
-        // SoundStream will be stopped automatically
-        // No additional cleanup needed for now but could be added if we later manage more resources
-    }
+    AudioStream::~AudioStream() = default; // default destructor is fine since we don't have any manual resource management
 
     bool AudioStream::initialize(unsigned int sampleRate) {
         m_sampleRate = sampleRate;
-        
-        // NES CPU runs at approximately 1,789,773 Hz
-        // We want to generate audio at m_sampleRate Hz
-        // samples_per_cpu_cycle = m_sampleRate / 1789773
-        // this could probably be found or genrated elsewhere, but we'll calculate it here for now
-        constexpr float NES_CPU_FREQUENCY = 1789773.0f;
-        m_cpuCyclesToSamples = static_cast<float>(m_sampleRate) / NES_CPU_FREQUENCY;
-        
-        // Initialize SFML SoundStream with mono audio at our sample rate
+        // Mono audio at the requested sample rate.
         sf::SoundStream::initialize(1, m_sampleRate);
-        
-        m_lastCpuCycle = 0;
-        m_samplesGenerated = 0;
-        
         return true;
     }
 
+    // Called by the SFML audio thread each time it needs more PCM data.
+    // We drain whatever samples the APU has accumulated since the last call.
+    // If the queue runs dry (emulation is slower than real-time, or the
+    // buffer size is large relative to one emulation frame), we hold the
+    // last known sample to avoid a harsh click/pop.
     bool AudioStream::onGetData(Chunk& data) {
-        m_buffer.clear();
-        
-        // Generate samples—request chunks of audio data
-        // We'll generate enough samples to fill a reasonable buffer
-        // This likely needs to be tuned but for now I shall leave it at this
-        unsigned int samplesToGenerate = 4096;
-        
-        for (unsigned int i = 0; i < samplesToGenerate; ++i) {
-            float sample = m_emu.get_apu().get_output();
-            
-            // Clamp
-            if (sample > 1.0f) sample = 1.0f;
-            if (sample < -1.0f) sample = -1.0f;
-            
-            // Convert to int16_t range [-32768, 32767]
-            int16_t intSample = static_cast<int16_t>(sample * 32767.0f);
-            m_buffer.push_back(intSample);
-        }
-        
-        data.samples = m_buffer.data();
-        data.sampleCount = m_buffer.size();
-        
-        return m_buffer.size() > 0; // Return true if we have data
+        // Use a fixed chunk size.  735 samples = 44100 / 60, which matches
+        // exactly one NES frame at 60 fps.  Keeping this small minimises
+        // latency; SFML will call us again immediately if needed.
+        constexpr size_t CHUNK_SIZE = 735;
+
+        m_buffer.resize(CHUNK_SIZE);
+
+        const size_t received = m_emu.get_apu().drain_samples(m_buffer.data(), CHUNK_SIZE);
+
+        // Pad any shortfall with the last sample (hold), not silence (zero).
+        // This avoids a sharp discontinuity when the emulation thread hasn't
+        // produced enough samples yet.
+        if (received > 0)
+            m_lastSample = m_buffer[received - 1];
+
+        for (size_t i = received; i < CHUNK_SIZE; ++i)
+            m_buffer[i] = m_lastSample;
+
+        data.samples     = m_buffer.data();
+        data.sampleCount = CHUNK_SIZE;
+        return true; // always return true — stream runs until stopped
     }
 
-    void AudioStream::onSeek(sf::Time timeOffset) {
-        // This would require seeking the emulator state, which we do not have implemented. For now, we'll just ignore seeks.
-        // here is a commented out example of how we might calculate the CPU cycle to seek to based on the time offset:
-
-        // unsigned long long targetCpuCycle = static_cast<unsigned long long>(timeOffset.asSeconds() * NES_CPU_FREQUENCY);
-        // m_lastCpuCycle = targetCpuCycle;
+    void AudioStream::onSeek(sf::Time /*timeOffset*/) {
+        // Seeking is not supported; the emulator state cannot be rewound.
     }
 
 }
