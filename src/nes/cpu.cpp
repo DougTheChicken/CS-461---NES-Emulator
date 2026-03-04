@@ -105,6 +105,33 @@ uint16_t CPU::addr_indy(bool check_page_cross) { // indirect, y
     return addr;
 }
 
+// ---- arithmetic helpers -----
+void CPU::do_adc(uint8_t value) {
+    // get status of carry from processor
+    uint8_t carry_in = (P & C_FLAG) ? 1 : 0;
+    // preform math:
+    // add accumulator, passed value, and carry flag state
+    uint16_t sum = A + value + carry_in;
+
+    // handle overflow flag
+    if (~(A ^ value) & (A ^ sum) & 0x80)
+        P |= V_FLAG;
+    else
+        P &= ~V_FLAG;
+
+    // handle carry flag
+    if (sum > 0xFF)
+        P |= C_FLAG;
+    else
+        P &= ~C_FLAG;
+
+    // move sum to accumulator
+    A = sum & 0xFF;
+
+    // update flags
+    setZN(A);
+}
+
 void CPU::init_state() {
     A = X = Y = 0;
     S = 0xFD;
@@ -1390,6 +1417,218 @@ int CPU::step() {
                     cycles_until_cpu_boundary += 1;
                 }
             }
+            break;
+        }
+
+        // ---- Arithmetic ----
+
+        case 0x61: { // acd indirect, x
+            // fetch indirect, x address
+            uint16_t addr = addr_indx();
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do addition
+            do_adc(val);
+
+            // update timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0x65:{ // adc zero page
+            // fetch zero page address
+            uint16_t addr = addr_zp();
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do addition
+            do_adc(val);
+
+            // update timing
+            cycles_until_cpu_boundary += 3;
+
+            break;
+        }
+        // 0x69 already implemented
+        case 0x6D: { // acd absolute
+            // fetch absolute address
+            uint16_t addr = addr_abs();
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do addition
+            do_adc(val);
+
+            // update timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0x71: { // acd indirect, y
+            // fetch indirect, y address
+            uint16_t addr = addr_indy(true);
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do addition
+            do_adc(val);
+
+            // update timing
+            cycles_until_cpu_boundary += 5;
+
+            break;
+        }
+        case 0x75: { // acd zero page, x
+            // fetch zero page, x address
+            uint16_t addr = addr_zpx();
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do addition
+            do_adc(val);
+
+            // update timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0x79: { // acd absolute, y
+            // fetch absolute, y address
+            uint16_t addr = addr_absy(true);
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do addition
+            do_adc(val);
+
+            // update timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0x7D: { // acd absolute, x
+            // fetch absolute, x address
+            uint16_t addr = addr_absx(true);
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do addition
+            do_adc(val);
+
+            // update timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xE1: { // sbc indirect, x
+            // fetch indirect, x address
+            uint16_t addr = addr_indx();
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do subtraction
+            do_adc(~val);
+
+            // update timing
+            cycles_until_cpu_boundary += 6;
+
+            break;
+        }
+        case 0xE5:{ // sbc zero page
+            // fetch zero page address
+            uint16_t addr = addr_zp();
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do subtraction
+            do_adc(~val);
+
+            // update timing
+            cycles_until_cpu_boundary += 3;
+
+            break;
+        }
+        case 0xE9:{ // sbc immediate
+            // fetch value
+            uint8_t val = fetch8();
+
+            // do subtraction
+            do_adc(~val);
+
+            // update timing
+            cycles_until_cpu_boundary += 2;
+
+            break;
+        }
+        case 0xED: { // sbc absolute
+            // fetch absolute address
+            uint16_t addr = addr_abs();
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do subtraction
+            do_adc(~val);
+
+            // update timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xF1: { // sbc indirect, y
+            // fetch indirect, y address
+            uint16_t addr = addr_indy(true);
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do subtraction
+            do_adc(~val);
+
+            // update timing
+            cycles_until_cpu_boundary += 5;
+
+            break;
+        }
+        case 0xF5: { // sbc zero page, x
+            // fetch zero page, x address
+            uint16_t addr = addr_zpx();
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do subtraction
+            do_adc(~val);
+
+            // update timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xF9: { // sbc absolute, y
+            // fetch absolute, y address
+            uint16_t addr = addr_absy(true);
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do subtraction
+            do_adc(~val);
+
+            // update timing
+            cycles_until_cpu_boundary += 4;
+
+            break;
+        }
+        case 0xFD: { // sbc absolute, x
+            // fetch absolute, x address
+            uint16_t addr = addr_absx(true);
+            // read value
+            uint8_t val = mem->read(addr);
+
+            // do subtraction
+            do_adc(~val);
+
+            // update timing
+            cycles_until_cpu_boundary += 4;
+
             break;
         }
 

@@ -62,6 +62,9 @@ private:
     uint16_t addr_indx();
     uint16_t addr_indy(bool check_page_cross = false);
 
+    // arithmetic helpers
+    void do_adc(uint8_t value);
+
     void init_state();
     void setZN(uint8_t v) {
         if (v == 0) P |= Z_FLAG; else P &= ~Z_FLAG;
