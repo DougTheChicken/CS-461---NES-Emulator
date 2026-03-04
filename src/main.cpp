@@ -17,6 +17,7 @@ int main(int argc, char** argv) {
     if (argc >= 2) {
         if (emu.load_rom(argv[1])) {
             std::fprintf(stderr, "Loaded ROM from CLI: %s\n", argv[1]);
+            ui::init_audio(emu);
             is_running = true;
         } else {
             std::fprintf(stderr, "Failed to load ROM: %s\n", argv[1]);
