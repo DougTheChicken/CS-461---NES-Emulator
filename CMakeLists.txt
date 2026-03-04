@@ -33,9 +33,9 @@ endif()
 
 # ---- SFML2 ----
 # Ask for SFML 2.5+ (allows Homebrew sfml@2 2.6.x), prefer CONFIG mode
-find_package(SFML 2.5 CONFIG QUIET COMPONENTS graphics window system)
+find_package(SFML 2.5 CONFIG QUIET COMPONENTS graphics window system audio)
 if(NOT SFML_FOUND)
-    find_package(SFML 2.5 COMPONENTS graphics window system REQUIRED)
+    find_package(SFML 2.5 COMPONENTS graphics window system audio REQUIRED)
 endif()
 
 # ---- Library: all sources under src/, EXCEPT main.cpp and ui/ ----
@@ -53,6 +53,7 @@ target_include_directories(nes_lib
 # ---- UI Library ----
 add_library(nes_ui STATIC
         ${PROJECT_SOURCE_DIR}/src/ui/ui.cpp
+        ${PROJECT_SOURCE_DIR}/src/ui/audio.cpp
 )
 target_include_directories(nes_ui
         PUBLIC
@@ -100,7 +101,7 @@ set_source_files_properties(${NFD_SOURCES} PROPERTIES
 )
 
 # Link UI target with SFML, nes_lib and gtest
-target_link_libraries(nes_ui PUBLIC sfml-graphics sfml-window sfml-system nes_lib GTest::gtest_main GTest::gtest)
+target_link_libraries(nes_ui PUBLIC sfml-graphics sfml-window sfml-system sfml-audio nes_lib GTest::gtest_main GTest::gtest)
 if(TGUI_FOUND)
     target_link_libraries(nes_ui PUBLIC TGUI::TGUI)
 endif()
