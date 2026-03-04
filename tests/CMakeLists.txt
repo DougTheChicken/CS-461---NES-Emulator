@@ -24,6 +24,12 @@ add_executable(ppu_tests
 )
 target_link_libraries(ppu_tests PRIVATE nes_lib)
 add_test(NAME ppu_tests COMMAND mem_tests)
+
+add_executable(apu_tests
+        apu/apu_test.cpp
+)
+target_link_libraries(apu_tests PRIVATE nes_lib GTest::gtest_main)
+
 add_executable(tests
         test_sanity.cpp
 )
@@ -33,3 +39,4 @@ add_test(NAME sanity_tests COMMAND tests)
 include(GoogleTest)
 gtest_discover_tests(opcode_tests)
 gtest_discover_tests(ROM_tests)
+gtest_discover_tests(apu_tests)
