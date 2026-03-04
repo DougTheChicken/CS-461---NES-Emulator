@@ -28,7 +28,8 @@ public:
     void step_cpu_cycles(unsigned long long cpu_cycles);
     int step_instruction();
 
-    nes::Memory& get_mem()  { return mem ;}
+    nes::Memory& get_mem()  { return mem; }
+    nes::APU& get_apu() { return apu; }
 
 private:
     void update_framebuffer();

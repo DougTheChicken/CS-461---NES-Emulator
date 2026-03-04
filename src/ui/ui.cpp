@@ -1,4 +1,5 @@
 #include "ui/ui.hpp"
+#include "ui/audio.hpp"
 #include "nes/console.hpp"
 #include <SFML/Graphics.hpp>
 #include <algorithm>
@@ -7,6 +8,7 @@ namespace {
     sf::RenderWindow* g_window = nullptr;
     sf::Texture g_texture;
     sf::Sprite g_sprite;
+    std::unique_ptr<ui::AudioStream> g_audioStream = nullptr;
     bool g_fullscreen = false;
     
     constexpr unsigned int SCALE = 3;  // Scale up the 256x240 resolution since it's so small
@@ -91,6 +93,29 @@ namespace ui {
             
             return true;
         } catch (...) {
+            return false;
+        }
+    }
+
+    bool init_audio(console& emu) {
+        try {
+            if (::g_audioStream) {
+                ::g_audioStream->stop();
+                ::g_audioStream.reset();
+            }
+
+            ::g_audioStream = std::make_unique<AudioStream>(emu);
+            if (!::g_audioStream->initialize(44100)) {
+                std::fprintf(stderr, "[UI] Failed to initialize audio stream\n");
+                ::g_audioStream.reset();
+                return false;
+            }
+
+            ::g_audioStream->play();
+            std::fprintf(stderr, "[UI] Audio initialized and playback started\n");
+            return true;
+        } catch (...) {
+            std::fprintf(stderr, "[UI] Exception during audio initialization\n");
             return false;
         }
     }
@@ -234,6 +259,7 @@ namespace ui {
                         if (!filePath.empty()) {
                             std::fprintf(stderr, "Loading ROM: %s\n", filePath.c_str());
                             emu.load_rom(filePath.c_str());
+                            init_audio(emu);
                             is_running = true;
                         }
                     }
@@ -257,6 +283,12 @@ namespace ui {
     }
     
     void shutdown() {
+        // Stop and cleanup audio
+        if (::g_audioStream) {
+            ::g_audioStream->stop();
+            ::g_audioStream.reset();
+        }
+
         // TODO: Clean up any additional resources if needed
         if (::g_window) {
             ::g_window->close();

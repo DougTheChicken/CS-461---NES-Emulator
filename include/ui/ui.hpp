@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <SFML/Graphics.hpp>
 #include <nfd.h>
+#include <memory>
 
 class console;
 
@@ -21,6 +22,9 @@ namespace ui {
 
     // Initializes the UI subsystem. Returns true on success, false on failure
     bool init();
+
+    // Initializes audio playback. Should be called after loading a ROM
+    bool init_audio(console& emu);
 
     // handle mapping logic for controler input
     void process_input(sf::Event& event, console& emu);

@@ -1,5 +1,7 @@
 #include "nes/apu.hpp"
 #include "nes/mem.hpp"
+#include <algorithm>
+#include <mutex>
 
 namespace nes {
 
@@ -583,6 +585,15 @@ void APU::reset()
     triangle.reset();
     noise.reset();
     dmc.reset();
+
+    // Flush any stale audio samples so the stream starts clean
+    // must be done after resetting the channels since they may have pending samples in the queue
+    // mutex is needed to avoid race conditions with the audio callback thread that may be draining samples at the same time
+    {
+        std::lock_guard<std::mutex> lock(m_sample_mutex);
+        m_sample_queue.clear();
+    }
+    m_sample_accumulator = 0.0;
 }
 
 // https://www.nesdev.org/wiki/APU_Frame_Counter
@@ -662,6 +673,25 @@ void APU::step()
         noise.clock_timer();
         dmc.clock_timer();
         dmc.clock_memory_reader();
+    }
+
+    // Collect a PCM sample when the accumulator crosses the threshold.
+    // This runs at ~44100 Hz relative to the CPU clock so that the audio
+    // stream always has freshly-generated samples to drain.
+    // (likely needs to be tuned if the emulator runs at a different CPU frequency or audio sample rate compared to what I was testing with)
+    m_sample_accumulator += 1.0;
+    if (m_sample_accumulator >= CYCLES_PER_SAMPLE)
+    {
+        m_sample_accumulator -= CYCLES_PER_SAMPLE;
+
+        float s = get_output();
+        if (s >  1.0f) s =  1.0f;
+        if (s < -1.0f) s = -1.0f;
+        const int16_t sample = static_cast<int16_t>(s * 32767.0f);
+
+        std::lock_guard<std::mutex> lock(m_sample_mutex);
+        if (m_sample_queue.size() < MAX_QUEUED_SAMPLES)
+            m_sample_queue.push_back(sample);
     }
 }
 
@@ -766,6 +796,18 @@ uint8_t APU::read_status()
 float APU::get_output() const
 {
     return get_pulse_output() + get_tnd_output();
+}
+
+size_t APU::drain_samples(int16_t* out, size_t count)
+{
+    std::lock_guard<std::mutex> lock(m_sample_mutex);
+    const size_t available = std::min(m_sample_queue.size(), count);
+    for (size_t i = 0; i < available; ++i)
+    {
+        out[i] = m_sample_queue.front();
+        m_sample_queue.pop_front();
+    }
+    return available;
 }
 
 //                     95.88
