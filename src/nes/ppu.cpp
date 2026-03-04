@@ -90,16 +90,23 @@ namespace nes {
                 // sprite zero hit detection against non-transparent bg pixel
                 // only happens during visible scanlines so background draws first
                 // and sprite 0 draws on top, but if both pixels are opaque, set the flag
-                if (!sprite_zero_hit_flag && sprite_rendering_flag) {
-                    if (sprites.secondary_count > 0 && sprites.is_sprite_zero(0)) {
-                        uint8_t spr_pixel = sprites.get_pixel(0);
-                        uint8_t bg_bits = bg_pixel & 0x03;
-                        int x_coord = timing.cycle() - 1;
+                if (!sprite_zero_hit_flag && sprite_rendering_flag)
+                {
+                    if (sprites.render_count > 0 && sprites.is_sprite_zero(0))
+                    {
+                        if (sprites.spr_x_render[0] == 0)
+                        {
+                            uint8_t spr_pixel = sprites.get_pixel(0);
+                            uint8_t bg_bits = bg_pixel & 0x03;
+                            int x_coord = timing.cycle() - 1;
 
-                        if (spr_pixel != 0 && bg_bits != 0 && x_coord != 255) {
-                            // no hit in leftmost 8 pixels if either clipping flag is clear
-                            if (x_coord >= 8 || (leftmost_background_flag && leftmost_sprite_flag)) {
-                                sprite_zero_hit_flag = true;
+                            if (spr_pixel != 0 && bg_bits != 0 && x_coord != 255)
+                            {
+                                // no hit in leftmost 8 pixels if either clipping flag is clear
+                                if (x_coord >= 8 || (leftmost_background_flag && leftmost_sprite_flag))
+                                {
+                                    sprite_zero_hit_flag = true;
+                                }
                             }
                         }
                     }
@@ -110,29 +117,29 @@ namespace nes {
                 // set this pixel to that color. if we have no such sprites, use the bg_pixel's color because
                 // there are no sprites that are eclipsing the background.
                 if (sprite_rendering_flag) {
-                    // loop over all sprites (up to 32 in secondary_count)
-                    for (int i = 0; i < sprites.secondary_count; i++) {
+                    // loop over all sprites locked in during previous scanline's fetch phase
+                    for (int i = 0; i < sprites.render_count; i++) {
                         // skip sprites that we haven't gotten to yet on this scanline (they are to the right)
-                        if (sprites.spr_x[i] != 0) continue;
+                        if (sprites.spr_x_render[i] != 0) continue;
 
                         // get current sprites bits from the shift register
                         uint8_t spr_pixel = sprites.get_pixel(i);
 
-                        // but skip transparent pixels
-                        if (spr_pixel == 0) continue;
-
                         // bit 5 tells us if sprite is foreground or behind background
-                        bool behind_bg = (sprites.spr_attr[i] & 0x20) != 0;
+                        bool behind_bg = (sprites.spr_attr_render[i] & 0x20) != 0;
 
                         // lookup sprite palette set our pixel's color
-                        uint8_t palette_index = (sprites.spr_attr[i] & 0x03);
-                        uint16_t palette_addr = 0x3F10 + (palette_index * 4) + spr_pixel;
-                        uint8_t nes_color_index = ppu_bus_read(palette_addr) & 0x3F;
+                        uint8_t palette_index = (sprites.spr_attr_render[i] & 0x03);
+                        uint8_t color = spr_pixel & 0x03;             // 0..3  (00 = transparent)
+                        if (color == 0) continue;
+
+                        uint16_t spr_palette_addr = 0x3F10 + (palette_index * 4) + color;
+                        uint8_t spr_color_index = ppu_bus_read(spr_palette_addr) & 0x3F;
 
                         // draw sprite if it's in front, or if background pixel is transparent
                         uint8_t bg_bits = bg_pixel & 0x03;
                         if (!behind_bg || bg_bits == 0) {
-                            final_pixel_color = NES_SYSTEM_PALETTE[nes_color_index];
+                            final_pixel_color = NES_SYSTEM_PALETTE[spr_color_index];
                         }
                         break; // the first non-transparent sprite wins the my-pixel-is-front game.
                         // we still exit here if the current sprite is behind the background. that's how NES does it.
@@ -143,6 +150,11 @@ namespace nes {
             int x_coord = timing.cycle() - 1;
             int y_coord = timing.scanline();
             framebuffer[y_coord * 256 + x_coord] = final_pixel_color;
+
+            // Clock sprite X counters and shift registers AFTER reading pixels.
+            // This matches the background pipeline: read the current pixel state,
+            // then advance the register (read-then-clock is correct NES hardware order).
+            if (rendering_enabled()) sprites.tick();
         }
 
         // ========================================================
@@ -196,7 +208,9 @@ namespace nes {
             }
             else if (timing.is_sprite_evaluation_cycle())
             {
-                sprites.evaluate(timing.scanline(), timing.cycle());
+                // Evaluate for scanline+1: sprites found here will be displayed
+                // on the next scanline after fetch loads their pattern data.
+                sprites.evaluate(timing.scanline() + 1, timing.cycle());
 
                 if (timing.cycle() == 256 && timing.is_visible_scanline())
                 {
@@ -206,7 +220,8 @@ namespace nes {
             }
             else if (timing.is_sprite_fetch_cycle())
             {
-                sprites.fetch(timing.scanline(), timing.cycle());
+                // Fetch pattern data for scanline+1 (matches the evaluate above)
+                sprites.fetch(timing.scanline() + 1, timing.cycle());
             }
         }
 
@@ -497,7 +512,7 @@ namespace nes {
         if (address < 0x2000)
         {
             if (chr_write_callback) { chr_write_callback(address, value); }
-            chr_ram[address] = value; // no write callback, so stick it here? does this happen?
+            else { chr_ram[address] = value; } // no write callback, so stick it here? does this happen?
         }
         // $2000 - $3EFF nametable write
         else if (address < 0x3F00)
@@ -509,7 +524,7 @@ namespace nes {
         else if (address < 0x4000)
         {
             // get index from mirrored address and stick the value in the spot
-            palette_ram[mirror_palette_address(address)] = value;
+            palette_ram[mirror_palette_address(address)] = value & 0x3F; // only store 6-bits
         }
     }
 
@@ -688,13 +703,11 @@ namespace nes {
     // https://www.nesdev.org/wiki/PPU_rendering#Drawing_overview
     void SpritePipeline::tick()
     {
-        // for each active sprite
-        for (int i = 0; i < secondary_count; i++) {
-            // if its x counter is still counting down, decrement it
-            if (spr_x[i] > 0) {
-                spr_x[i]--;
+        // Tick the render set (data locked in at cycle 257 of previous scanline)
+        for (int i = 0; i < render_count; i++) {
+            if (spr_x_render[i] > 0) {
+                spr_x_render[i]--;
             } else {
-                // once it hits 0 shart shifting the pattern data
                 spr_shift_low[i]  <<= 1;
                 spr_shift_high[i] <<= 1;
             }
@@ -707,27 +720,28 @@ namespace nes {
         // clearing secondary oam with 0xFF means they never match the
         // scanline by accident
         int idx = cycle - 1;
-        if (idx < static_cast<int>(sizeof(secondary_oam))) {
+        if (cycle >= 1 && cycle <= 32) {
             secondary_oam[idx] = 0xFF;
         }
     }
 
     // Does this sprite intersect this scanline?
-    bool SpritePipeline::intersects(int scanline, uint8_t top)
+    bool SpritePipeline::intersects(int scanline, uint8_t oam_y)
     {
         int sprite_height = ppu.sprite_size_flag ? 16 : 8;
+        const int top = int(oam_y) + 1;
         return (scanline >= top) && (scanline < top + sprite_height);
     }
 
     bool SpritePipeline::is_sprite_zero(int index) {
-        return spr_oam_index[index] == 0;
+        return spr_oam_index_render[index] == 0;
     }
 
     // get a sprite's pixel bits in lohi order to check for 0 hit
     uint8_t SpritePipeline::get_pixel(int index) {
         uint8_t lo = (spr_shift_low[index]  & 0x80) ? 1 : 0;
         uint8_t hi = (spr_shift_high[index] & 0x80) ? 2 : 0;
-        return lo | hi;
+        return lo | hi; // reads from shift registers (render side)
     }
 
     // there are 64 sprites, each is 4-bytes: x, tile, attr, y
@@ -735,6 +749,7 @@ namespace nes {
     // and then copy the hits into our secondary oam, tra
     void SpritePipeline::evaluate(int scanline, int cycle)
     {
+        if (cycle < 65 || cycle > 256) { return; } // don't evaluate outside of cycles
         // if we already scanned all sprites, we are done
         if (oam_scan_index >= 64) return;
 
@@ -751,7 +766,7 @@ namespace nes {
             // got a hit but we only handle up to 8 sprites per scanline
             if (secondary_count < 8)
             {
-                // secondary oam is 256 bytes of 64 sprites x 4 bytes each,
+                // secondary oam is 32 bytes of 8 sprites x 4 bytes each,
                 // get our starting offeset from sprite #
                 int dest = secondary_count * 4;
 
@@ -761,13 +776,8 @@ namespace nes {
                 secondary_oam[dest + 2] = attr;
                 secondary_oam[dest + 3] = x;
 
-                // store state for fetch and draw
-                spr_x[secondary_count] = x; // x counter to avoid oam until needed
-                spr_attr[secondary_count] = attr; // palette, front/back, reversed
-
-                // sprite 0 hit detection, take low 8 bits of sprite index (0..7). we check for sprite 0 during draw.
-                spr_oam_index[secondary_count] = static_cast<uint8_t>(oam_scan_index);
-
+                // secondary slot origin tracking to detect sprite 0
+                secondary_src_index[secondary_count] = static_cast<uint8_t>(oam_scan_index);
                 secondary_count++;
             }
             else
@@ -782,8 +792,30 @@ namespace nes {
     // Cycles 257-320: Sprite fetches (8 sprites total, 8 cycles per sprite)
     void SpritePipeline::fetch(int scanline, int cycle)
     {
-        // once per scanline
-        if (cycle == 257) { clear_unused_shifters(); }
+        if (cycle < 257 || cycle > 320) return; // tryiing to find bugs, so add guards
+
+        // At cycle 257, evaluation for this scanline+1 is complete.
+        // Snapshot eval results into the render working set so the display
+        // section can use them on the next scanline without being overwritten
+        // by the next round of evaluation.
+        if (cycle == 257) {
+            render_count = (secondary_count > 8) ? 8 : secondary_count; // tryiing to find bugs, so add guards
+
+            for (int i = 0; i < render_count; i++) {
+                int base = i * 4;
+                uint8_t attr = secondary_oam[base + 2];
+                uint8_t x    = secondary_oam[base + 3];
+
+                spr_x_render[i]    = x;
+                spr_attr_render[i] = attr;
+
+                // sprite identity for sprite-0 hit:
+                // you need a secondary_src_index[8] filled during evaluate().
+                spr_oam_index_render[i] = secondary_src_index[i];
+            }
+
+            clear_unused_shifters(); // ok, but it should clear based on render_count
+        }
 
         // 8 sprites
         uint8_t sprite_index = (cycle - 257) / 8;
@@ -792,14 +824,13 @@ namespace nes {
         uint8_t phase = (cycle - 257) % 8;
 
         // can't go over the max
-        if (sprite_index >= secondary_count) { return; }
+        if (sprite_index >= render_count) { return; }
 
         // extract sprite fields
         int base = sprite_index * 4;
         uint8_t y = secondary_oam[base];
         uint8_t tile = secondary_oam[base + 1];
         uint8_t attr = secondary_oam[base + 2];
-        uint8_t x = secondary_oam[base + 3];
 
         // from https://www.nesdev.org/wiki/PPU_rendering#Cycles_257-320
         // The tile data for the sprites on the next scanline are fetched here.
@@ -811,22 +842,21 @@ namespace nes {
         // 6 Pattern table tile high (8 bytes above pattern table tile low address)
         if (phase == 0)
         {
-            // store state for draw
-            spr_x[sprite_index] = x; // x counter to avoid oam until needed
-            spr_attr[sprite_index] = attr; // palette, front/back, reversed
-
-            // latch pattern address for this sprite
-            spr_pattern_addr[sprite_index] = compute_pattern_address(scanline, y, tile, attr);
+            // nothing required here (hardware does garbage reads)
         }
         else if (phase == 4)
         {
+            uint8_t attr_r = spr_attr_render[sprite_index];
+            uint16_t addr = compute_pattern_address(scanline, y, tile, attr_r);
             spr_shift_low[sprite_index] =
-                maybe_flipped_h(attr, ppu.ppu_bus_read(spr_pattern_addr[sprite_index]));
+                maybe_flipped_h(attr_r, ppu.ppu_bus_read(addr));
         }
         else if (phase == 6)
         {
+            uint8_t attr_r = spr_attr_render[sprite_index];
+            uint16_t addr = compute_pattern_address(scanline, y, tile, attr_r);
             spr_shift_high[sprite_index] =
-                maybe_flipped_h(attr, ppu.ppu_bus_read(spr_pattern_addr[sprite_index] + 8));
+                maybe_flipped_h(attr_r, ppu.ppu_bus_read(addr + 8));
         }
     }
 
@@ -842,7 +872,7 @@ namespace nes {
 
         // fine_y = scanline offset within the sprite
         // 0..7 for 8x8 or 0..15 for 8x16
-        int fine_y = scanline - y;
+        int fine_y = scanline - ((int) y + 1);
 
         // Vertical flip? (attr bit 7)
         if (attr & 0x80)
@@ -887,10 +917,13 @@ namespace nes {
 
     void SpritePipeline::clear_unused_shifters()
     {
-        for (int i = secondary_count; i < 8; i++)
+        for (int i = render_count; i < 8; i++)
         {
-            spr_shift_low[i] = 0;
-            spr_shift_high[i] = 0;
+            // bug hunting -- be thorough on clearing
+            spr_shift_low[i] = spr_shift_high[i] = 0;
+            spr_x_render[i] = 0;
+            spr_attr_render[i] = 0;
+            spr_oam_index_render[i] = 0xFF;
         }
     }
 
@@ -1010,40 +1043,24 @@ namespace nes {
 
     // calculate the 4-bit palette index for the current pixel
     // should use the fine_x scroll (0-7) from the ppu internal 'x' register
-    uint8_t BackgroundPipeline::get_pixel() const 
+    uint8_t BackgroundPipeline::get_pixel() const
     {
-        // determine how many pixels offset from the start we currently are
-        // note: this comes from the ppu fine_x scroll
-        uint8_t scroll_offset = ppu.x;
+        const uint8_t fine_x = ppu.x & 0x07;
+        const uint16_t sel = 0x8000u >> fine_x;
 
-        // mask to look at exactly one bit in shift registers
-        uint16_t pixel_selector = 0x8000 >> scroll_offset;
+        const uint8_t bit0 = (bg_pattern_low  & sel) ? 1 : 0;
+        const uint8_t bit1 = (bg_pattern_high & sel) ? 2 : 0;
+        const uint8_t color = bit0 | bit1;          // 0..3
 
-        // check each of the data layers for a 1 in this spot
-        uint8_t shape_bit_0 = 0;
-        if (bg_pattern_low & pixel_selector) {
-            shape_bit_0 = 1;        // value if bit 0 is set
-        }
+        // If the pattern pixel is 0, background is transparent (universal color)
+        if (color == 0)
+            return 0;
 
-        uint8_t shape_bit_1 = 0;
-        if (bg_pattern_high & pixel_selector) {
-            shape_bit_1 = 2;        // value if bit 1 is set
-        }
+        const uint8_t pal0 = (bg_attr_low  & sel) ? 4 : 0;   // bit 2
+        const uint8_t pal1 = (bg_attr_high & sel) ? 8 : 0;   // bit 3
+        const uint8_t palette = pal0 | pal1;                 // 0,4,8,12
 
-        // Attribute Layer (The "Color Palette" for the tile)
-        uint8_t palette_bit_0 = 0;
-        if (bg_attr_low & pixel_selector) {
-            palette_bit_0 = 4;      // value if bit 2 is set
-        }
-
-        uint8_t palette_bit_1 = 0;
-        if (bg_attr_high & pixel_selector) {
-            palette_bit_1 = 8;      // value if bit 3 is set
-        }
-
-        // add all bits together to determine the final colour index (0-15)
-        uint8_t pixel_index = shape_bit_0 + shape_bit_1 + palette_bit_0 + palette_bit_1;
-        return pixel_index;
+        return palette | color; // 1..15
     }
 
     // Increments the horizontal position in v
