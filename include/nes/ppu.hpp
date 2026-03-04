@@ -114,9 +114,12 @@ namespace nes
         static uint8_t maybe_flipped_h(uint8_t attributes, uint8_t byte);
         static bool flip_vertical(uint8_t attributes);
         uint16_t compute_pattern_address(int scanline, uint8_t y, uint8_t tile, uint8_t attr);
-        int secondary_count = 0; // # of sprites in secondary oam
-        // from: https://setsideb.com/behind-the-code-about-the-nes-sprite-capabilities
-        uint8_t spr_x[8]{}, spr_attr[8]{};
+        int secondary_count = 0; // # of sprites in secondary oam (eval in progress)
+        int render_count = 0;   // # of sprites locked in for current scanline's display
+
+        // render working set: snapshotted from eval at cycle 257 each scanline
+        uint8_t spr_x_render[8]{}, spr_attr_render[8]{};
+        uint8_t secondary_src_index[8];
 
        static constexpr uint8_t reverse_table[256] = {
             0x00, 0x80, 0x40, 0xC0, 0x20, 0xA0, 0x60, 0xE0,
@@ -166,7 +169,7 @@ namespace nes
         // able to display them.
         // sprite shift registers
         uint8_t spr_shift_low[8]{}, spr_shift_high[8]{};
-        uint8_t spr_oam_index[8]{};
+        uint8_t spr_oam_index_render[8]{}; // render working set
         uint16_t spr_pattern_addr[8]{}; // pattern address for this scanline’s sprites
 
         // secondary OAM working set for the current scanline
