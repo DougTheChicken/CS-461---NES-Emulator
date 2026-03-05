@@ -27,7 +27,7 @@ bool console::load_rom(const char* filepath) {
     mem.map_prg(rom.prg_data(), rom.prg_size_bytes());
 
     cpu.attach_memory(&mem);
-    ppu.vertical_mirroring = rom.alternate_nametable_layout();
+    ppu.vertical_mirroring = rom.nametable_arrangement();
 
     const std::size_t prg_banks = rom.prg_size_bytes() / 16384;
     const std::size_t chr_banks = rom.chr_size_bytes() / 8192;
