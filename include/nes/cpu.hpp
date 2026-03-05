@@ -7,6 +7,8 @@
 namespace nes {
 
 class Memory;
+class PPU;
+class APU;
 
 class CPU {
 public:
@@ -16,10 +18,14 @@ public:
     void reset();
 
     // Run CPU until PPU timeline reaches ppu_target (ppu cycles)
-    void step_to(cycle_t ppu_target);
+    // void step_to(cycle_t ppu_target);
+    void step_to(cycle_t ppu_target, const PPU& ppu, const APU& apu);
 
     // Execute a single instruction
     int step();
+
+    // Advance CPU's internal timer without executing (for DMA/DMC stalls)
+    void add_stall(cycle_t ppu_cycles);
 
     // handle non-maskable interrupts for PPU
     void nmi();

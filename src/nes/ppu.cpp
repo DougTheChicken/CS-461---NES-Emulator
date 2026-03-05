@@ -1,4 +1,5 @@
 #include "nes/ppu.hpp"
+#include <cstring>
 
 namespace nes {
 
@@ -24,6 +25,7 @@ namespace nes {
     void PPU::reset()
     {
         oam_address = 0;
+        memset(oam, 0xFF, sizeof(oam)); // all sprites off-screen (Y=0xFF)
         timing.reset();
         bg.reset();
         sprites.reset();
@@ -51,6 +53,7 @@ namespace nes {
         w = false;
         data_buffer = 0;
         oam_dma_page = 0; // High byte of CPU address for OAM DMA ($XX00–$XXFF)
+        oam_dma_pending_stall = 0;
         nmi_pending = false; // signal to CPU: take NMI
         nmi_prev = false; // edge detect previous (vblank_flag && vblank_nmi_flag)
         frame_complete = false;
@@ -66,16 +69,6 @@ namespace nes {
         }
 
         if (timing.is_vblank_end()) {
-            static int frames = 0;
-            if (frames < 580) {
-                for (int i = 0; i < 32; i++) {
-                    std::printf("%02X%s",
-                        palette_ram[i] & 0x3F,
-                        (i % 16 == 15) ? "\n" : " ");
-                }
-                std::printf("\n");
-            }
-            frames++;
 
             vblank_flag = false;
             nmi_pending = false;
@@ -197,7 +190,6 @@ namespace nes {
                     increment_scroll_y();
                 }
                 if (timing.cycle() == 257) {
-                    // bg.reload(); // this might cause double reload per scanline?
                     transfer_address_x();
                 }
             }
@@ -211,9 +203,13 @@ namespace nes {
         // ========================================================
         // 3. SPRITE EVALUATION
         // ========================================================
-        if (timing.is_visible_scanline())
+        // pre-render scanline evaluates and fetches sprites for scanline 0,
+        // just like a visible scanline evaluates for scanline+1.
+        if (timing.is_visible_scanline() || timing.is_prerender_scanline())
         {
             if (timing.is_start_of_scanline()) {
+                // visible: begin_scanline(N) sets up for evaluating N+1's sprites
+                // pre-render: begin_scanline(-1) sets up for evaluating scanline 0's sprites
                 sprites.begin_scanline(timing.scanline());
             }
             else if (timing.is_sprite_clear_cycle()) {

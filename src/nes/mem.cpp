@@ -120,7 +120,17 @@ void Memory::write(uint16_t addr, uint8_t value) {
             uint8_t page[256];
             uint16_t base = static_cast<uint16_t>(value) << 8;
             for (uint16_t i = 0; i < 256; i++) page[i] = read(base + i);
+            /**
+            static int dma_count = 0;
+            dma_count++;
+            if (ppu.oam_address != 0) {
+                std::printf("[MEM] OAM DMA #%d WARN oam_addr=%d page=$%02X page[0..3]=%02X %02X %02X %02X\n",
+                    dma_count, (int)ppu.oam_address, value, page[0], page[1], page[2], page[3]);
+            }
+            */
             ppu.oam_dma_execute(page);
+            // ppu.oam_dma_pending_stall = 513; // real HW stalls CPU 513 cycles during DMA
+            ppu.oam_dma_pending_stall = 513 * CPU_TO_PPU;
             return;
         }
 

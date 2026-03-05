@@ -2,6 +2,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include "nes/mem.hpp"
+#include "nes/apu.hpp"
+#include "nes/ppu.hpp"
 
 namespace nes {
 
@@ -185,11 +187,25 @@ void CPU::reset() {
     init_state();
 }
 
-void CPU::step_to(cycle_t ppu_target) {
-    while (next_cpu_tick_ppu < ppu_target) {
-        int cpu_cycles = step();
+
+// step_to() needs to be able to stop after $4014 writes so
+// CPU can execute instructions after DMA starts
+void CPU::step_to(cycle_t ppu_target, const PPU& ppu, const APU& apu)
+{
+    while (next_cpu_tick_ppu < ppu_target)
+    {
+        // If a stall is pending, CPU must stop immediately.
+        if (ppu.oam_dma_pending_stall > 0 || apu.dmc.pending_stall_cycles > 0) {
+            break;
+        }
+
+        const int cpu_cycles = step();
         next_cpu_tick_ppu += static_cast<cycle_t>(cpu_cycles) * CPU_TO_PPU;
     }
+}
+
+void CPU::add_stall(cycle_t ppu_cycles) {
+    next_cpu_tick_ppu += ppu_cycles;
 }
 
 int CPU::step() {

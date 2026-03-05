@@ -97,33 +97,57 @@ void console::run_rom() {
     }
 }
 
-void console::step(cycle_t stepcount) {
+void console::step(cycle_t stepcount)
+{
+    const cycle_t target = master_cycle_count + stepcount;
 
-    // we need to step apu & ppu along with cpu
-    cycle_t target = master_cycle_count + stepcount;
-
-    while (master_cycle_count < target) {
-        // step PPU
-        for (int i = 0; i < CPU_TO_PPU; i++) { ppu.step(); }
-        apu.step(); // step one APU to one CPU here. APU handles its own timing
-
-        // skip cpu execution for however many stall cycles are pending
-        while (apu.dmc.pending_stall_cycles > 0 && master_cycle_count < target) {
-            master_cycle_count++;
-            apu.dmc.pending_stall_cycles--;
-        }
-
-        // check NMI and IRQ
-        if (ppu.nmi_pending) {
-            ppu.nmi_pending = false;
-            cpu.nmi();
-        }
-        if (apu.frame_irq_flag || apu.dmc.irq_pending) { cpu.irq(); }
-
-        // step CPU
-        cpu.step_to(master_cycle_count + 1);
+    while (master_cycle_count < target)
+    {
+        // one PPU cycle always happens
+        ppu.step();
         master_cycle_count++;
+
+        // stalls expressed in PPU cycles
+        bool stalled = false;
+
+        if (apu.dmc.pending_stall_cycles > 0) {
+            apu.dmc.pending_stall_cycles--;
+            stalled = true;
+        }
+        if (ppu.oam_dma_pending_stall > 0) {
+            ppu.oam_dma_pending_stall--;
+            stalled = true;
+        }
+
+        if (stalled) {
+            cpu.add_stall(1);
+
+            // APU runs on CPU boundaries
+            if ((master_cycle_count % CPU_TO_PPU) == 0) {
+                apu.step();
+            }
+            continue;
+        }
+
+        // 3) CPU/APU on CPU boundaries
+        if ((master_cycle_count % CPU_TO_PPU) == 0)
+        {
+            apu.step();
+
+            // catch CPU up to this boundary
+            cpu.step_to(master_cycle_count, ppu, apu);
+
+            // latch interrupts for next instruction boundary
+            if (ppu.nmi_pending) {
+                ppu.nmi_pending = false;
+                cpu.nmi();
+            }
+            if (apu.frame_irq_flag || apu.dmc.irq_pending) {
+                cpu.irq();
+            }
+        }
     }
+
     update_framebuffer();
 }
 
