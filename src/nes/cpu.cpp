@@ -208,7 +208,7 @@ int CPU::step() {
     uint8_t opcode = fetch8();
 
     static int trace = 0;
-    if ((trace++ % 128) == 0) {
+    if ((trace++ % 128000000) == 0) {
         std::fprintf(stderr,
                      "TRACE PC=%04X OPC=%02X A=%02X X=%02X Y=%02X P=%02X S=%02X\n",
                      (unsigned)pc_before, (unsigned)opcode,

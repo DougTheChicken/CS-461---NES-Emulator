@@ -8,15 +8,17 @@ namespace nes {
 
     PPU::PPU() : bg(*this), sprites(*this), timing() { reset(); }
 
+    // Values are stored as 0xAABBGGRR so that on little-endian systems the bytes in
+    // memory are [R][G][B][A], matching SFML's sf::Texture::update() RGBA expectation.
     static const uint32_t NES_SYSTEM_PALETTE[64] = {
-    0xFF545454, 0xFF001E74, 0xFF081090, 0xFF300088, 0xFF440064, 0xFF5C0030, 0xFF540400, 0xFF3C1800,
-    0xFF202A00, 0xFF083A00, 0xFF004000, 0xFF003C00, 0xFF00323C, 0xFF000000, 0xFF000000, 0xFF000000,
-    0xFF989698, 0xFF084CC4, 0xFF3032EC, 0xFF5C1EE4, 0xFF8814B0, 0xFFA01464, 0xFF982220, 0xFF783C00,
-    0xFF545A00, 0xFF287200, 0xFF087C00, 0xFF007628, 0xFF006678, 0xFF000000, 0xFF000000, 0xFF000000,
-    0xFFECEEEC, 0xFF4C9AEC, 0xFF787CEC, 0xFFB062EC, 0xFFE454EC, 0xFFEC58B4, 0xFFEC6A64, 0xFFD48820,
-    0xFFA0AA00, 0xFF74C400, 0xFF4CD020, 0xFF38CC6C, 0xFF38B4CC, 0xFF3C3C3C, 0xFF000000, 0xFF000000,
-    0xFFECEEEC, 0xFFA8CCEC, 0xFFBCBCEC, 0xFFD4B2EC, 0xFFECAEEC, 0xFFECAED4, 0xFFECB4B0, 0xFFE4C490,
-    0xFFCCD278, 0xFFB4DE78, 0xFFA8E290, 0xFF98E2B4, 0xFFA0D6E4, 0xFFA0A2A0, 0xFF000000, 0xFF000000
+    0xFF545454, 0xFF741E00, 0xFF901008, 0xFF880030, 0xFF640044, 0xFF30005C, 0xFF000454, 0xFF00183C,
+    0xFF002A20, 0xFF003A08, 0xFF004000, 0xFF003C00, 0xFF3C3200, 0xFF000000, 0xFF000000, 0xFF000000,
+    0xFF989698, 0xFFC44C08, 0xFFEC3230, 0xFFE41E5C, 0xFFB01488, 0xFF6414A0, 0xFF202298, 0xFF003C78,
+    0xFF005A54, 0xFF007228, 0xFF007C08, 0xFF287600, 0xFF786600, 0xFF000000, 0xFF000000, 0xFF000000,
+    0xFFECEEEC, 0xFFEC9A4C, 0xFFEC7C78, 0xFFEC62B0, 0xFFEC54E4, 0xFFB458EC, 0xFF646AEC, 0xFF2088D4,
+    0xFF00AAA0, 0xFF00C474, 0xFF20D04C, 0xFF6CCC38, 0xFFCCB438, 0xFF3C3C3C, 0xFF000000, 0xFF000000,
+    0xFFECEEEC, 0xFFECCCA8, 0xFFECBCBC, 0xFFECB2D4, 0xFFECAEEC, 0xFFD4AEEC, 0xFFB0B4EC, 0xFF90C4E4,
+    0xFF78D2CC, 0xFF78DEB4, 0xFF90E2A8, 0xFFB4E298, 0xFFE4D6A0, 0xFFA0A2A0, 0xFF000000, 0xFF000000
     };
 
     void PPU::reset()
@@ -64,6 +66,17 @@ namespace nes {
         }
 
         if (timing.is_vblank_end()) {
+            static int frames = 0;
+            if (frames < 580) {
+                for (int i = 0; i < 32; i++) {
+                    std::printf("%02X%s",
+                        palette_ram[i] & 0x3F,
+                        (i % 16 == 15) ? "\n" : " ");
+                }
+                std::printf("\n");
+            }
+            frames++;
+
             vblank_flag = false;
             nmi_pending = false;
             sprite_zero_hit_flag = false;
@@ -184,7 +197,7 @@ namespace nes {
                     increment_scroll_y();
                 }
                 if (timing.cycle() == 257) {
-                    bg.reload();
+                    // bg.reload(); // this might cause double reload per scanline?
                     transfer_address_x();
                 }
             }
@@ -874,11 +887,15 @@ namespace nes {
         // 0..7 for 8x8 or 0..15 for 8x16
         int fine_y = scanline - ((int) y + 1);
 
+        // making sure we always are in range to avoid glitches
+        if (fine_y < 0) fine_y = 0;
+        if (fine_y >= sprite_height) fine_y = sprite_height - 1;
+
         // Vertical flip? (attr bit 7)
         if (attr & 0x80)
             fine_y = (sprite_height - 1) - fine_y;  // takes a fine_y of 0 1 2 3 4 ... and turns it into ... 4 3 2 1 0
 
-        if (!ppu.sprite_size_flag) // 8x16 when set
+        if (!ppu.sprite_size_flag) // 8x8 when clear
         {
             // from https://www.nesdev.org/wiki/PPU_programmer_reference#PPUCTRL_-_Miscellaneous_settings_($2000_write)
             // in 8x8, sprite_pattern_table_address_flag (0: $0000; 1: $1000; ignored in 8x16 mode)

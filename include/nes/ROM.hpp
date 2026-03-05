@@ -25,7 +25,7 @@ namespace nes {
 
         std::size_t prg_size_bytes() const { return PRG_ROM_size * 16384u; }
         const uint8_t* prg_data() const { return PRG_data.data(); }
-        std::size_t chr_size_bytes() const { return CHR_ROM_size * 8192u; }
+        std::size_t chr_size_bytes() const { return CHR_data.size(); }
         const uint8_t* chr_data() const { return CHR_data.data(); }
         const bool alternate_nametable_layout() const { return has_alternate_nametable_layout; }
         const bool nametable_arrangement() const { return nametable_arrangement_; }
