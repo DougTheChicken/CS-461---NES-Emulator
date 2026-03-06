@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
             cycle_accumulator += CYCLES_PER_FRAME;
             auto cycles = static_cast<cycle_t>(cycle_accumulator);
             cycle_accumulator -= static_cast<double>(cycles);
-            emu.step(cycles);
+            emu.step(cycles * CPU_TO_PPU);
         }
     }
 

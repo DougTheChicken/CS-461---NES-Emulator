@@ -303,6 +303,7 @@ namespace nes
 
         // $4014 values OAMDMA - Sprite DMA ($4014 write)
         uint8_t oam_dma_page = 0; // High byte of CPU address for OAM DMA ($XX00–$XXFF)
+        int oam_dma_pending_stall = 0; // CPU stall cycles remaining after OAM DMA (513 on real HW)
 
         // PPU internal memory
         uint8_t nametable_ram[2048] = {}; // CIRAM $2000-$2FFF (mirroring handled by mapper/bus)

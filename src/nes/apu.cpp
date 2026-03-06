@@ -476,8 +476,8 @@ bool DeltaModulationChannel::fetch_sample_byte()
         }
     }
 
-    // DMA fetch stalls the CPU for ~4 cycles due to bus contention.
-    pending_stall_cycles = 4;
+    // DMA fetch stalls the CPU for ~4 CPU cycles due to bus contention.
+    pending_stall_cycles = 4 * CPU_TO_PPU; //
     return true;
 }
 
