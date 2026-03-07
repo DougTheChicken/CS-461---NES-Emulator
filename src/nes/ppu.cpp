@@ -46,7 +46,7 @@ namespace nes {
         emphasize_blue = false;
         sprite_overflow_flag = false; // Set when more than 8 sprites appear on a scanline
         sprite_zero_hit_flag = false; // Set when sprite 0 overlaps a non-transparent background pixel
-        vblank_flag = false; // Set at start of VBlank, cleared on read of $2002. Unreliabe, use NMI instead
+        vblank_flag = true; // Set at start of VBlank, cleared on read of $2002. Unreliabe, use NMI instead
         v = 0; // Current VRAM address (15 bits). During rendering, used for the scroll position.
         t = 0;
         x = 0;
