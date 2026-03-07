@@ -1,0 +1,87 @@
+name: CI Multi-Platform Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- CACHING (Saves ~3-5 minutes) ---
+      - name: Restore vcpkg cache
+        if: matrix.os == 'windows-latest'
+        uses: actions/cache@v4
+        with:
+          path: $VCPKG_INSTALLATION_ROOT/installed
+          key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-
+
+      # --- MacOS SETUP ---
+      - name: Install Dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install sdl2 cmake googletest sfml@2 || true
+
+      # --- LINUX SETUP ---
+      - name: Install Dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev cmake g++ libgtest-dev libgmock-dev libsfml-dev
+          sudo cmake -S /usr/src/googletest -B /tmp/build-gtest
+          sudo cmake --build /tmp/build-gtest --config Release
+          sudo cmake --install /tmp/build-gtest
+
+      # --- WINDOWS SETUP ---
+      - name: Install Dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          vcpkg install sdl2:x64-windows gtest:x64-windows sfml:x64-windows
+          vcpkg integrate install
+
+      # --- BUILD EXECUTION ---
+      - name: Build (Unix)
+        if: matrix.os != 'windows-latest'
+        run: make build
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            -DBUILD_TESTING=ON `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          cmake --build build --config Release
+
+      # --- TEST EXECUTION ---
+      - name: Run Tests
+        run: |
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            ./build/tests/Release/tests.exe
+          else
+            make test ARGS="--output-on-failure"
+          fi
+        shell: bash
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-${{ matrix.os }}
+          path: |
+            build/**/nes_emu.exe
+            build/**/tests.exe
+            build/**/nes_emu
+            bin/
+            *.out
+          if-no-files-found: warn

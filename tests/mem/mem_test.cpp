@@ -48,7 +48,9 @@ void test_ppu_registers() {
     // Since PPUCTRL ($2000) is usually write-only and returns 0 or open bus,
     // we can only test that writing to mirrors doesn't crash.
     // However, we CAN test that reading $2002 works at $200A (Mirror)
-    assert((mem.read(0x200A) & 0x80) == 0x80);
+    nes::PPU ppu2;
+    nes::Memory mem2(ppu2, apu);
+    assert((mem2.read(0x200A) & 0x80) == 0x80);
 
     log_pass("PPU Register Access & Mirroring");
 }

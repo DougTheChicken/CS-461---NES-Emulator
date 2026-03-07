@@ -249,7 +249,7 @@ namespace nes
         // $2002 values PPUSTATUS - Rendering events
         bool sprite_overflow_flag = false; // Set when more than 8 sprites appear on a scanline
         bool sprite_zero_hit_flag = false; // Set when sprite 0 overlaps a non-transparent background pixel
-        bool vblank_flag = false; // Set at start of VBlank, cleared on read of $2002. Unreliabe, use NMI instead
+        bool vblank_flag = true; // Set at start of VBlank, cleared on read of $2002. Unreliabe, use NMI instead
 
         // From https://www.nesdev.org/wiki/PPU_memory_map#OAM
         // The PPU internally contains 256 bytes of memory known as Object Attribute Memory which determines how
