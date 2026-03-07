@@ -32,7 +32,7 @@ jobs:
       # --- MacOS SETUP ---
       - name: Install Dependencies (macOS)
         if: matrix.os == 'macos-latest'
-        run: brew install sdl2 cmake googletest sfml@2
+        run: brew install sdl2 cmake googletest sfml@2 || true
 
       # --- LINUX SETUP ---
       - name: Install Dependencies (Linux)
@@ -70,7 +70,7 @@ jobs:
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
             ./build/tests/Release/tests.exe
           else
-            make test
+            make test ARGS="--output-on-failure"
           fi
         shell: bash
 
@@ -79,7 +79,9 @@ jobs:
         with:
           name: emulator-${{ matrix.os }}
           path: |
-            build/src/Release/nes_emu.exe
+            build/**/nes_emu.exe
+            build/**/tests.exe
+            build/**/nes_emu
             bin/
-            build/nes_emu
             *.out
+          if-no-files-found: warn
