@@ -4,3 +4,4 @@ cmake-build-*/
 *.iml
 build/
 .DS_Store
+.vs/

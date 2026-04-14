@@ -31,6 +31,9 @@ namespace nes
         bool is_sprite_fetch_cycle() const;
         bool is_sprite_clear_cycle() const;
         bool is_sprite_evaluation_cycle() const;
+        using MirrorFn = std::function<uint8_t()>;
+        void set_mirror_callback(MirrorFn callback) { mirror_callback = std::move(callback); }
+        MirrorFn mirror_callback;
 
     private:
 
@@ -219,6 +222,9 @@ namespace nes
         using ChrWriteFn = std::function<void(uint16_t, uint8_t)>; // write takes (address, value)
         void set_chr_read_callback(ChrReadFn callback) { chr_read_callback = std::move(callback); }
         void set_chr_write_callback(ChrWriteFn callback) {chr_write_callback = std::move(callback);}
+        using MirrorFn = std::function<uint8_t()>;
+        void set_mirror_callback(MirrorFn callback) { mirror_callback = std::move(callback); }
+        MirrorFn mirror_callback;
 
 
         // helper to tell Scanline, BackgroundPipeline and SpritePipeline when one of the rendering flags is set

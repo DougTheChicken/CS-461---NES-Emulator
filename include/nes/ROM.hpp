@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include "mapper/mapper_000.hpp"
+#include "mapper/mapper_001.hpp"
 
 // TODO: Make the iNES ROM spec a struct and parse it in a more structured way.
 

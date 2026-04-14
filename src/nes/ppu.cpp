@@ -553,35 +553,30 @@ namespace nes {
         uint16_t offset = address - 0x2000;
 
         // find which nametable (0..3) it belongs to
-        uint16_t table  = offset >> 10;
+        uint16_t table = offset >> 10;
 
         // get our index into our nametable 0..0x3FF
         // by masking to keep lower 10-bits to get 0..1023
-        uint16_t index  = offset & 0x03FF;
+        uint16_t index = offset & 0x03FF;
 
         // real physical memory page the address uses: either 0 or 1 that
         // the logical table maps to after mirroring
         uint16_t physical;
 
-        // vertical mirror maps
-        // NT0 and NT1 to physical 0
-        // NT2 and NT3 to physical 1
-        if (vertical_mirroring)
-        {
-            // use upper bit of logical nametable index
-            // 00, 01 become 0 and 10, 11 become 1
-            physical = table >> 1;
-        }
+        // Ask the cartridge for the current mode. Fallback to 0xFF if unsupported.
+        uint8_t mode = mirror_callback ? mirror_callback() : 0xFF;
 
-        // horizontal mirror maps
-        // NT0 nad NT2 to physical 0
-        // NT1 and NT3 to physical 1
-        else
-        {
-            // user lower bit of logical nametable index
-            // 00 -> 0 and 10 -> 0
-            // 01 -> 1 and 11 -> 1
-            physical = table & 1;
+        switch (mode) {
+        case 0: physical = 0; break;          // One-Screen Lower
+        case 1: physical = 1; break;          // One-Screen Upper
+        case 2: physical = table & 1; break;  // Vertical
+        case 3: physical = table >> 1; break; // Horizontal
+        default:
+            // Fallback for simple mappers (like Mapper 000) that rely on the iNES header
+            // Note: The hardware bit logic for Horizontal/Vertical is often flipped
+            // depending on how you structure your page mapping!
+            physical = vertical_mirroring ? (table >> 1) : (table & 1);
+            break;
         }
 
         // physical selects which 1 KB nametable page (0 or 1)
@@ -589,7 +584,6 @@ namespace nes {
         // final address = page_base + in-page offset which is a
         // final index into 2kb of nametable VRAM 0x000-0x7FF
         return (physical * 0x0400) + index;
-
     }
 
     // Memory address mirroring helper
