@@ -61,6 +61,14 @@ bool console::load_rom(const char* filepath) {
         }
     });
 
+    // Inside console::load_rom
+    ppu.set_mirror_callback([this]() -> uint8_t {
+        if (rom.get_mapper()) {
+            return rom.get_mapper()->mirrorMode();
+        }
+        return 0xFF; // Fallback to header flag
+        });
+
 
     cpu.reset();
 

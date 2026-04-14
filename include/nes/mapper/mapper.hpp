@@ -21,11 +21,13 @@ namespace nes {
             //        NOTE: rom arrays can be much larger than 64 kb, hence use of uint32_t
             // return (bool): true if address is handled, false otherwise
             // cpu mapper read and write
-            virtual bool cpuMapRead(uint16_t addr, uint32_t &mapped_addr) = 0;
+            virtual bool cpuMapRead(uint16_t addr, uint32_t &mapped_addr, uint8_t &data) = 0;
             virtual bool cpuMapWrite(uint16_t addr, uint32_t &mapped_addr, uint8_t data) = 0;
             // ppu mapper read and write
             virtual bool ppuMapRead(uint16_t addr, uint32_t &mapped_addr) = 0;
             virtual bool ppuMapWrite(uint16_t addr, uint32_t &mapped_addr) = 0;
+			// PPU Mirroring (not all mappers have to implement this, so not pure virtual)
+            virtual uint8_t mirrorMode() { return 0xFF; }
 
         // this is protected rather than private so other mapper handling classes
         // (i.e. nrom, mmc1, mmc3, etc.) can still see these variables and modify them

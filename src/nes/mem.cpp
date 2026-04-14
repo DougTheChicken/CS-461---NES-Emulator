@@ -35,10 +35,21 @@ void Memory::map_prg(const uint8_t* prg_data, std::size_t prg_size) {
 
 uint8_t Memory::read(uint16_t addr) {
     uint32_t mapped_addr = 0;
+    uint8_t mapper_data = 0; // 1. Create a variable to catch intercepted data
 
-    // check mapper for cartridge space (usually $4020-$FFFF)
-    if (mapper && mapper->cpuMapRead(addr, mapped_addr)) {
-        open_bus = prg[mapped_addr];
+    // 2. Pass mapper_data as the 3rd argument to satisfy the new signature
+    if (mapper && mapper->cpuMapRead(addr, mapped_addr, mapper_data)) {
+
+        // 3. Check the flag to determine where the data lives
+        if (mapped_addr == 0xFFFFFFFF) {
+            // Mapper handled the data internally (e.g., Save RAM at $6000)
+            open_bus = mapper_data;
+        }
+        else {
+            // Mapper produced a physical ROM address, fetch it from PRG array
+            open_bus = prg[mapped_addr];
+        }
+
         return open_bus;
     }
 

@@ -9,7 +9,7 @@ namespace nes {
 
         // cpu mapper read
         // mapper 0 (nrom) handles prg-rom range $8000-$FFFF
-        bool Mapper_000::cpuMapRead(uint16_t addr, uint32_t &mapped_addr) {
+        bool Mapper_000::cpuMapRead(uint16_t addr, uint32_t &mapped_addr, uint8_t &data) {
             // check range
             if (addr >= 0x8000 && addr <= 0xFFFF) {
                 // mirroring logic:
@@ -28,13 +28,11 @@ namespace nes {
         bool Mapper_000::cpuMapWrite(uint16_t addr, uint32_t &mapped_addr, uint8_t data) {
             // check range
             if (addr >= 0x8000 && addr <= 0xFFFF) {
-                // mirroring logic:
-                // if 1 bank (16 kb), mask with 0x3FFF to repeat data at $C000
-                // if 2 banks (32 kb), mask with 0x7FFF for linear mapping
-                mapped_addr = addr & (prgBanks > 1 ? 0x7FFF : 0x3FFF);
-                // let bus know mapper "owns" space
-                // NOTE: writing to rom range _usually_ does nothing on hardware
-                return true;
+                if (is_chr_ram) {
+                    // if chr ram, allow writes to chr ram area (mapper 0 doesn't have registers, so we can just write to chr ram directly)
+                    mapped_addr = addr & (chrBanks > 1 ? 0x1FFF : 0x0FFF); // mirror chr ram if multiple banks
+                    return true;
+				}
             }
 
             // if outside range, don't allow cpu to write
