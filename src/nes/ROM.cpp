@@ -97,6 +97,21 @@ namespace nes {
                 break;
             }
 
+            case 2: { // UXROM
+                mapper_ptr = std::make_shared<Mapper_002>(PRG_ROM_size, CHR_ROM_size);
+                break;
+            }
+
+            case 3: { // CNROM
+                mapper_ptr = std::make_shared<Mapper_003>(PRG_ROM_size, CHR_ROM_size);
+                break;
+            }
+
+            case 4: { // MMC3
+                mapper_ptr = std::make_shared<Mapper_004>(PRG_ROM_size, CHR_ROM_size);
+                break;
+            }
+
             default: { // unsupported mapper
                 // say mapper failed
                 std::fprintf(stderr, "[ROM] Unsupported mapper: %u\n", mapper_id);
