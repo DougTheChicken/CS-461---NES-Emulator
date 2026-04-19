@@ -339,6 +339,24 @@ TEST(AudioTest, APUSilenceWhenDisabled) {
     EXPECT_NEAR(output, 0.0f, 0.001f);
 }
 
+TEST(APUTest, PulseHighRegisterWriteDoesNotReloadTimerCounter) {
+    nes::PulseChannel pulse(true);
+
+    pulse.timer_period = 0x0123;
+    pulse.timer_counter = 5;
+    pulse.length_counter.counter = 0;
+    pulse.envelope.start_flag = false;
+    pulse.sequencer_position = 4;
+
+    pulse.write_register(3, 0b00001001); // length index + high timer bits = 001
+
+    EXPECT_EQ(pulse.timer_period, 0x0123); // low byte 0x23, high bits 0x1
+    EXPECT_EQ(pulse.timer_counter, 5);     // should NOT be reloaded
+    EXPECT_EQ(pulse.sequencer_position, 0);
+    EXPECT_TRUE(pulse.envelope.start_flag);
+    EXPECT_GT(pulse.length_counter.counter, 0);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
