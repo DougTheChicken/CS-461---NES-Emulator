@@ -154,41 +154,41 @@ void PulseChannel::write_register(uint8_t reg, uint8_t value)
 {
     switch (reg & 0x03)
     {
-    case 0: // $4000/$4004  DDLC VVVV
-    {
-        duty_mode                    = (value >> 6) & 0x03;
-        const bool halt_or_loop      = (value & 0x20) != 0;
-        length_counter.halt          = halt_or_loop;
-        envelope.loop_flag           = halt_or_loop;
-        envelope.constant_volume_flag = (value & 0x10) != 0;
-        envelope.volume_period       = value & 0x0F;
-        break;
-    }
-    case 1: // $4001/$4005  EPPP NSSS
-    {
-        sweep.enabled     = (value & 0x80) != 0;
-        sweep.period      = (value >> 4) & 0x07;
-        sweep.negate      = (value & 0x08) != 0;
-        sweep.shift       = value & 0x07;
-        sweep.reload_flag = true;
-        break;
-    }
-    case 2: // $4002/$4006  TTTT TTTT  (timer low 8 bits)
-    {
-        timer_period = (timer_period & 0x0700) | value;
-        break;
-    }
-    case 3: // $4003/$4007  LLLL LTTT  (length load + timer high 3 bits)
-    {
-        timer_period = (timer_period & 0x00FF) | (static_cast<uint16_t>(value & 0x07) << 8);
-        length_counter.load((value >> 3) & 0x1F);
+        case 0: // $4000/$4004  DDLC VVVV
+        {
+            duty_mode                     = (value >> 6) & 0x03;
+            const bool halt_or_loop       = (value & 0x20) != 0;
+            length_counter.halt           = halt_or_loop;
+            envelope.loop_flag            = halt_or_loop;
+            envelope.constant_volume_flag = (value & 0x10) != 0;
+            envelope.volume_period        = value & 0x0F;
+            break;
+        }
+        case 1: // $4001/$4005  EPPP NSSS
+        {
+            sweep.enabled     = (value & 0x80) != 0;
+            sweep.period      = (value >> 4) & 0x07;
+            sweep.negate      = (value & 0x08) != 0;
+            sweep.shift       = value & 0x07;
+            sweep.reload_flag = true;
+            break;
+        }
+        case 2: // $4002/$4006  TTTT TTTT  (timer low 8 bits)
+        {
+            timer_period = (timer_period & 0x0700) | value;
+            break;
+        }
+        case 3: // $4003/$4007  LLLL LTTT  (length load + timer high 3 bits)
+        {
+            timer_period = (timer_period & 0x00FF) | (static_cast<uint16_t>(value & 0x07) << 8);
+            length_counter.load((value >> 3) & 0x1F);
 
-        // Side effects: restart sequencer and envelope
-        sequencer_position = 0;
-        timer_counter      = timer_period;
-        envelope.start_flag = true;
-        break;
-    }
+            // Side effects: restart sequencer and envelope.
+            // Do NOT reload timer_counter here.
+            sequencer_position  = 0;
+            envelope.start_flag = true;
+            break;
+        }
     }
 }
 
@@ -388,7 +388,7 @@ void Noise::clock_envelope()
 
 uint8_t Noise::output() const
 {
-    if ((lfsr & 1) || length_counter.counter == 0)
+    if (!enabled || (lfsr & 1) || length_counter.counter == 0)
         return 0;
     return envelope.output();
 }
@@ -743,9 +743,19 @@ void APU::write_status(uint8_t value)
     noise.enabled = (status_enable & 0x08) != 0;
     if (!noise.enabled) noise.length_counter.clear();
 
+    const bool was_dmc_enabled = dmc.enabled;
     dmc.enabled = (status_enable & 0x10) != 0;
 
-    // "Writing to this register clears the DMC interrupt flag."
+    if (!dmc.enabled)
+    {
+        dmc.bytes_remaining = 0;
+    }
+    else if (!was_dmc_enabled || dmc.bytes_remaining == 0)
+    {
+        dmc.start_sample();
+    }
+
+    // Writing to $4015 clears the DMC interrupt flag.
     dmc.irq_pending = false;
 }
 
