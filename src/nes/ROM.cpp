@@ -86,7 +86,7 @@ namespace nes {
 				bool is_chr_ram = (CHR_ROM_size == 0);
                 uint16_t mapper_chr_banks = (CHR_ROM_size == 0) ? 1 : CHR_ROM_size;
                 // pass info to mapper 0
-                mapper_ptr = std::make_shared<Mapper_000>(PRG_ROM_size, mapper_chr_banks);
+                mapper_ptr = std::make_shared<Mapper_000>(PRG_ROM_size, mapper_chr_banks, is_chr_ram);
                 break;
             }
 
