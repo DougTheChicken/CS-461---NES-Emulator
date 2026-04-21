@@ -272,8 +272,8 @@ TEST(APUTest, APUStatusRegisterRead) {
     // Read status
     uint8_t status = mem.read(0x4015);
     
-    // Bit 0 should be set if pulse 1 length counter > 0
-    EXPECT_TRUE((status & 0x01) != 0 || (status & 0x01) == 0); // Valid either way
+    // Bit 0 should be set once pulse 1 has a loaded length counter.
+    EXPECT_NE(status & 0x01, 0);
 }
 
 TEST(APUTest, APUFrameCounter) {
