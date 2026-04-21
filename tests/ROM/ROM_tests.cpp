@@ -1,9 +1,6 @@
 #include "nes/ROM.hpp"
-
 #include <gtest/gtest.h>
-
 #include <string>
-
 #include "support/test_utils.hpp"
 
 namespace {
