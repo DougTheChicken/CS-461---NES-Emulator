@@ -117,10 +117,6 @@ else()
     message(STATUS "Skipping UI tests in headless mode")
 endif()
 
-
-
-
-
 add_executable(tests
         test_sanity.cpp
 )
