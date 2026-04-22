@@ -102,11 +102,11 @@ if(NOT HEADLESS_MODE)
     target_include_directories(ui_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
 
     gtest_discover_tests(ui_tests)
-    gtest_discover_tests(audio_tests)
 else()
     message(STATUS "Skipping UI tests in headless mode")
 endif()
 
+gtest_discover_tests(audio_tests)
 add_executable(audio_tests
         ui/audio_tests.cpp
 )
