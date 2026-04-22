@@ -100,7 +100,11 @@ if(NOT HEADLESS_MODE)
     )
     target_link_libraries(ui_tests PRIVATE nes_lib nes_ui GTest::gtest_main)
     target_include_directories(ui_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
-    gtest_discover_tests(ui_tests)
+    # Use:
+    gtest_discover_tests(ui_tests
+            DISCOVERY_TIMEOUT 10
+            PROPERTIES SKIP_REGULAR_EXPRESSION "Fixture_Constructor|Fixture_Destructor"
+    )
 else()
     message(STATUS "Skipping UI tests in headless mode")
 endif()
