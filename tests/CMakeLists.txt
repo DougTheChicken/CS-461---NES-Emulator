@@ -106,12 +106,13 @@ else()
     message(STATUS "Skipping UI tests in headless mode")
 endif()
 
-gtest_discover_tests(audio_tests)
+
 add_executable(audio_tests
         ui/audio_tests.cpp
 )
 target_link_libraries(audio_tests PRIVATE nes_lib nes_ui GTest::gtest_main)
 target_include_directories(audio_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
+gtest_discover_tests(audio_tests)
 
 add_executable(tests
         test_sanity.cpp
