@@ -93,11 +93,19 @@ add_executable(timing_tests
 target_link_libraries(timing_tests PRIVATE nes_lib GTest::gtest_main)
 target_include_directories(timing_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
 
-add_executable(ui_tests
-        ui/ui_tests.cpp
-)
-target_link_libraries(ui_tests PRIVATE nes_lib nes_ui GTest::gtest_main)
-target_include_directories(ui_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
+# Conditionally register UI tests only when a display is available
+if(NOT HEADLESS_MODE)
+    add_executable(ui_tests
+            ui/ui_tests.cpp
+    )
+    target_link_libraries(ui_tests PRIVATE nes_lib nes_ui GTest::gtest_main)
+    target_include_directories(ui_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
+
+    gtest_discover_tests(ui_tests)
+    gtest_discover_tests(audio_tests)
+else()
+    message(STATUS "Skipping UI tests in headless mode")
+endif()
 
 add_executable(audio_tests
         ui/audio_tests.cpp
