@@ -1,130 +1,86 @@
-#include <iostream>
-#include <cassert>
-#include "../../include/nes/mem.hpp"
-#include "../../include/nes/ppu.hpp"
-#include "../../include/nes/apu.hpp"
+#include "nes/apu.hpp"
+#include "nes/mem.hpp"
+#include "nes/ppu.hpp"
 
-// A helper to print "PASS" in green
-void log_pass(const char* test_name) {
-    std::cout << "\033[1;32m[PASS] " << test_name << "\033[0m" << std::endl;
-}
+#include <gtest/gtest.h>
 
-void test_ram_functionality() {
+#include <array>
+#include <memory>
+
+#include "nes/mapper/mapper_000.hpp"
+
+namespace {
+
+class BusFixture : public ::testing::Test {
+protected:
+    BusFixture()
+        : ppu(), apu(), mem(ppu, apu) {}
+
     nes::PPU ppu;
     nes::APU apu;
-    nes::Memory mem(ppu, apu);
+    nes::Memory mem;
+};
 
-    // 1. Basic Read/Write
+TEST_F(BusFixture, RamMirrorsAcrossInternalSpace) {
     mem.write(0x0000, 0x42);
-    assert(mem.read(0x0000) == 0x42);
+    EXPECT_EQ(mem.read(0x0000), 0x42);
 
-    // 2. RAM Mirroring
-    // Writing to $0000 should be visible at $0800, $1000, $1800
     mem.write(0x0000, 0xAB);
-    assert(mem.read(0x0800) == 0xAB); // Mirror 1
-    assert(mem.read(0x1000) == 0xAB); // Mirror 2
-    assert(mem.read(0x1800) == 0xAB); // Mirror 3
+    EXPECT_EQ(mem.read(0x0800), 0xAB);
+    EXPECT_EQ(mem.read(0x1000), 0xAB);
+    EXPECT_EQ(mem.read(0x1800), 0xAB);
 
-    // 3. Reverse Mirroring
-    // Writing to a mirror ($1FFF) should affect base ($07FF)
     mem.write(0x1FFF, 0xCD);
-    assert(mem.read(0x07FF) == 0xCD);
-
-    log_pass("RAM Read/Write & Mirroring");
+    EXPECT_EQ(mem.read(0x07FF), 0xCD);
 }
 
-void test_ppu_registers() {
-    nes::PPU ppu;
-    nes::APU apu;
-    nes::Memory mem(ppu, apu);
+TEST_F(BusFixture, PpuRegisterMirroringReadsStatus) {
+    EXPECT_EQ(mem.read(0x2002) & 0x80, 0x80);
 
-    // 1. Test Initial PPU Status ($2002)
-    // Your constructor sets ppu_status = 0x80 (VBlank)
-    uint8_t status = mem.read(0x2002);
-    assert((status & 0x80) == 0x80);
-
-    // 2. Test PPU Register Mirroring
-    // $2000 mirrored every 8 bytes ($2008, $2010, etc.)
-    // Since PPUCTRL ($2000) is usually write-only and returns 0 or open bus,
-    // we can only test that writing to mirrors doesn't crash.
-    // However, we CAN test that reading $2002 works at $200A (Mirror)
-    nes::PPU ppu2;
-    nes::Memory mem2(ppu2, apu);
-    assert((mem2.read(0x200A) & 0x80) == 0x80);
-
-    log_pass("PPU Register Access & Mirroring");
+    nes::PPU mirrored_ppu;
+    nes::APU mirrored_apu;
+    nes::Memory mirrored_mem(mirrored_ppu, mirrored_apu);
+    EXPECT_EQ(mirrored_mem.read(0x200A) & 0x80, 0x80);
 }
 
-void test_bounds_safety() {
-    nes::PPU ppu;
-    nes::APU apu;
-    nes::Memory mem(ppu, apu);
-
-    // Test Open Bus / Unmapped regions
-    // $4020 is start of Cartridge space, but no cart loaded yet.
-    // Should return 0x00 (or open bus behavior) and NOT crash.
-    assert(mem.read(0x4020) == 0x00);
-
-    log_pass("Bounds & Safety");
-}
-
-void test_controller_input() {
-    nes::PPU ppu;
-    nes::APU apu;
-    nes::Memory mem(ppu, apu);
-
-    // 1. Simulate Player holding 'A' and 'Start' buttons
-    // Standard NES Bit Order: Right Left Down Up Start Sel B A
-    // But our shift register logic usually expects:
-    // Bit 0 = A, Bit 3 = Start. 
-    // Let's set the input byte to 0b00001001 (0x09) -> A and Start are pressed.
+TEST_F(BusFixture, ControllerStrobeAndSerialReadWork) {
     mem.set_controller1(0x09);
     mem.set_controller2(0x09);
 
-    // 2. Perform the "Strobe" Sequence
-    // To read the controller, the game writes 1, then 0 to $4016.
-    mem.write(0x4016, 1); // Strobe ON (Reloads buttons continuously)
-    mem.write(0x4016, 0); // Strobe OFF (Locks current state into shift register)
+    mem.write(0x4016, 1);
+    mem.write(0x4016, 0);
 
-    // 3. Read the buttons one by one (Serial Read)
-    // Expected Sequence: A(1), B(0), Sel(0), Start(1), Up(0), Down(0), Left(0), Right(0)
+    EXPECT_EQ(mem.read(0x4016), 1);
+    EXPECT_EQ(mem.read(0x4016), 0);
+    EXPECT_EQ(mem.read(0x4016), 0);
+    EXPECT_EQ(mem.read(0x4016), 1);
+    EXPECT_EQ(mem.read(0x4016), 0);
+    EXPECT_EQ(mem.read(0x4016), 0);
+    EXPECT_EQ(mem.read(0x4016), 0);
+    EXPECT_EQ(mem.read(0x4016), 0);
 
-    // Controller 1
-    assert(mem.read(0x4016) == 1); // Read 1: A (Pressed)
-    assert(mem.read(0x4016) == 0); // Read 2: B
-    assert(mem.read(0x4016) == 0); // Read 3: Select
-    assert(mem.read(0x4016) == 1); // Read 4: Start (Pressed)
-    assert(mem.read(0x4016) == 0); // Read 5: Up
-    assert(mem.read(0x4016) == 0); // Read 6: Down
-    assert(mem.read(0x4016) == 0); // Read 7: Left
-    assert(mem.read(0x4016) == 0); // Read 8: Right
-
-    // Controller 2
-    assert(mem.read(0x4017) == 1); // Read 1: A (Pressed)
-    assert(mem.read(0x4017) == 0); // Read 2: B
-    assert(mem.read(0x4017) == 0); // Read 3: Select
-    assert(mem.read(0x4017) == 1); // Read 4: Start (Pressed)
-    assert(mem.read(0x4017) == 0); // Read 5: Up
-    assert(mem.read(0x4017) == 0); // Read 6: Down
-    assert(mem.read(0x4017) == 0); // Read 7: Left
-    assert(mem.read(0x4017) == 0); // Read 8: Right
-
-    // 4. Test "Open Bus" or Empty Reads
-    // After 8 reads, the standard NES controller keeps returning 1 (or open bus).
-    // For simple emulation, returning 1 is common to signal "end of data".
-    // assert(mem.read(0x4016) == 1); 
-
-    log_pass("Controller Strobe & Shift Register");
+    EXPECT_EQ(mem.read(0x4017), 1);
+    EXPECT_EQ(mem.read(0x4017), 0);
+    EXPECT_EQ(mem.read(0x4017), 0);
+    EXPECT_EQ(mem.read(0x4017), 1);
+    EXPECT_EQ(mem.read(0x4017), 0);
+    EXPECT_EQ(mem.read(0x4017), 0);
+    EXPECT_EQ(mem.read(0x4017), 0);
+    EXPECT_EQ(mem.read(0x4017), 0);
 }
 
-int main() {
-    std::cout << "Running NES Memory Tests..." << std::endl;
+TEST_F(BusFixture, CartridgePrgMappingReadsThroughMapper) {
+    std::array<uint8_t, 16384> prg{};
+    prg[0x0000] = 0x11;
+    prg[0x3FFC] = 0x34;
+    prg[0x3FFD] = 0x12;
 
-    test_ram_functionality();
-    test_ppu_registers();
-    test_bounds_safety();
-    test_controller_input();
+    mem.set_mapper(std::make_shared<nes::Mapper_000>(1, 1));
+    mem.map_prg(prg.data(), prg.size());
 
-    std::cout << "\nAll tests passed successfully!!" << std::endl;
-    return 0;
+    EXPECT_EQ(mem.read(0x8000), 0x11);
+    EXPECT_EQ(mem.read(0xFFFC), 0x34);
+    EXPECT_EQ(mem.read(0xFFFD), 0x12);
 }
+
+} // namespace

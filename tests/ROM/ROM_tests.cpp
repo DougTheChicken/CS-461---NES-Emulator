@@ -1,114 +1,51 @@
 #include "nes/ROM.hpp"
 #include <gtest/gtest.h>
-
-#include <filesystem>
 #include <string>
-#include <vector>
+#include "support/test_utils.hpp"
 
-static std::string find_nestest_rom() {
-    namespace fs = std::filesystem;
+namespace {
 
-    // - repo root:          ./tests/test_roms/...
-    // - build dir:          ../tests/test_roms/...
-    // - build/tests dir:    ../../tests/test_roms/...
-    const std::vector<std::string> candidates = {
-        "./tests/test_roms/nestest/nestest.nes",
-        "../tests/test_roms/nestest/nestest.nes",
-        "../../tests/test_roms/nestest/nestest.nes",
-    };
-
-    for (const auto& p : candidates) {
-        if (fs::exists(p)) return p;
+class RomFixture : public ::testing::Test {
+protected:
+    void SetUp() override {
+        rom_path = test_support::find_nestest_rom();
+        ASSERT_FALSE(rom_path.empty()) << "Could not locate nestest ROM from current working directory.";
     }
-    return "";
+
+    std::string rom_path;
+};
+
+TEST_F(RomFixture, LoadFromFileSuccess) {
+    nes::ROM rom;
+    EXPECT_TRUE(rom.load_from_file(rom_path.c_str()));
 }
 
-TEST(LOAD, load_from_file_success) {
-    const std::string path = find_nestest_rom();
-    ASSERT_FALSE(path.empty()) << "Could not locate nestest ROM from current working directory.";
-
+TEST_F(RomFixture, ReportsRomMetadata) {
     nes::ROM rom;
-    bool result = rom.load_from_file(path.c_str());
-    EXPECT_EQ(result, true);
-}
+    ASSERT_TRUE(rom.load_from_file(rom_path.c_str()));
 
-TEST(LOAD, prg_size_bytes) {
-    const std::string path = find_nestest_rom();
-    ASSERT_FALSE(path.empty()) << "Could not locate nestest ROM from current working directory.";
-
-    nes::ROM rom;
-    rom.load_from_file(path.c_str());
     EXPECT_EQ(rom.prg_size_bytes(), 16384u);
-}
-
-TEST(LOAD, chr_size_bytes) {
-    const std::string path = find_nestest_rom();
-    ASSERT_FALSE(path.empty()) << "Could not locate nestest ROM from current working directory.";
-
-    nes::ROM rom;
-    rom.load_from_file(path.c_str());
     EXPECT_EQ(rom.chr_size_bytes(), 8192u);
-}
-
-TEST(LOAD, alternate_nametable_layout) {
-    const std::string path = find_nestest_rom();
-    ASSERT_FALSE(path.empty()) << "Could not locate nestest ROM from current working directory.";
-
-    nes::ROM rom;
-    rom.load_from_file(path.c_str());
-    EXPECT_EQ(rom.alternate_nametable_layout(), false);
-}
-
-TEST(LOAD, mapper) {
-    const std::string path = find_nestest_rom();
-    ASSERT_FALSE(path.empty()) << "Could not locate nestest ROM from current working directory.";
-
-    nes::ROM rom;
-    rom.load_from_file(path.c_str());
+    EXPECT_FALSE(rom.alternate_nametable_layout());
     EXPECT_EQ(rom.mapper(), 0u);
+    EXPECT_TRUE(rom.is_loaded());
 }
 
-TEST(LOAD, is_loaded) {
-    const std::string path = find_nestest_rom();
-    ASSERT_FALSE(path.empty()) << "Could not locate nestest ROM from current working directory.";
-
-    nes::ROM rom;
-    rom.load_from_file(path.c_str());
-    EXPECT_EQ(rom.is_loaded(), true);
-}
-
-TEST(RESET, reset_clears_loaded) {
+TEST(ROMResetTest, ClearsLoadedStateAndData) {
     nes::ROM rom;
     rom.reset();
-    EXPECT_EQ(rom.is_loaded(), false);
-}
 
-TEST(RESET, reset_clears_PNG) {
-    nes::ROM rom;
-    rom.reset();
+    EXPECT_FALSE(rom.is_loaded());
     EXPECT_EQ(rom.prg_size_bytes(), 0u);
-}
-
-TEST(RESET, reset_clears_CHR) {
-    nes::ROM rom;
-    rom.reset();
     EXPECT_EQ(rom.chr_size_bytes(), 0u);
-}
-
-TEST(RESET, reset_clears_mapper) {
-    nes::ROM rom;
-    rom.reset();
     EXPECT_EQ(rom.mapper(), 0u);
-}
-
-TEST(RESET, reset_clears_nametable_layout) {
-    nes::ROM rom;
-    rom.reset();
-    EXPECT_EQ(rom.alternate_nametable_layout(), false);
-}
-
-TEST(RESET, reset_clears_data) {
-    nes::ROM rom;
-    rom.reset();
+    EXPECT_FALSE(rom.alternate_nametable_layout());
     EXPECT_EQ(rom.prg_data(), nullptr);
 }
+
+TEST(ROMLoadTest, MissingFileFailsCleanly) {
+    nes::ROM rom;
+    EXPECT_FALSE(rom.load_from_file("/this/path/should/not/exist.nes"));
+}
+
+} // namespace

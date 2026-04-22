@@ -3,9 +3,9 @@
 namespace nes {
 
     // constructor: pass bank counts up to base mapper class
-    Mapper_000::Mapper_000(uint16_t prgBanks, uint16_t chrBanks)
+    Mapper_000::Mapper_000(uint16_t prgBanks, uint16_t chrBanks, bool is_chr_ram)
         // member initialiser using base mapper class
-        : Mapper(prgBanks, chrBanks) {}
+        : Mapper(prgBanks, chrBanks), is_chr_ram(is_chr_ram) {}
 
         // cpu mapper read
         // mapper 0 (nrom) handles prg-rom range $8000-$FFFF
@@ -26,16 +26,7 @@ namespace nes {
         // cpu mapper write
         // mapper 0 (nrom) doesn't have bank-switching registers (it's a simple mapper)
         bool Mapper_000::cpuMapWrite(uint16_t addr, uint32_t &mapped_addr, uint8_t data) {
-            // check range
-            if (addr >= 0x8000 && addr <= 0xFFFF) {
-                if (is_chr_ram) {
-                    // if chr ram, allow writes to chr ram area (mapper 0 doesn't have registers, so we can just write to chr ram directly)
-                    mapped_addr = addr & (chrBanks > 1 ? 0x1FFF : 0x0FFF); // mirror chr ram if multiple banks
-                    return true;
-				}
-            }
-
-            // if outside range, don't allow cpu to write
+            // CPU writes in PRG-ROM space are ignored.
             return false;
         }
 
@@ -54,9 +45,13 @@ namespace nes {
         }
 
         // ppu mapper write
-        // mapper 0 (nrom) uses rom for chr (means writes are typically ignored)
+        // mapper 0 (nrom) uses rom for chr unless the cartridge provides chr-ram
         bool Mapper_000::ppuMapWrite(uint16_t addr, uint32_t &mapped_addr) {
-            // don't allow ppu to write to memory cause chr is not being used
+            if (addr >= 0x0000 && addr <= 0x1FFF && is_chr_ram) {
+                mapped_addr = addr;
+                return true;
+            }
+
             return false;
         }
 } // namespace nes

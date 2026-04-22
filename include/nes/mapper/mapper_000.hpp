@@ -7,7 +7,7 @@ namespace nes {
 
         public:
             // constructor
-            Mapper_000(uint16_t prgBanks, uint16_t charBanks);
+            Mapper_000(uint16_t prgBanks, uint16_t charBanks, bool is_chr_ram = false);
             // deconstructor
             // override acting as safety net if mapper deconstructor is no longer virtual for some reason
             ~Mapper_000() override = default;
