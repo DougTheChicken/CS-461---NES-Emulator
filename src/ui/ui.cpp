@@ -1,11 +1,13 @@
 #include "ui/ui.hpp"
 #include "ui/audio.hpp"
+#include "ui/keybinds.hpp"
 #include "nes/console.hpp"
 #include <SFML/Graphics.hpp>
 #include <algorithm>
 
 namespace {
     sf::RenderWindow* g_window = nullptr;
+    ui::KeyBinds g_keybinds = ui::KeyBinds::defaults(); // loaded from keybinds.ini on init()
     sf::Texture g_texture;
     sf::Sprite g_sprite;
     std::unique_ptr<ui::AudioStream> g_audioStream = nullptr;
@@ -36,6 +38,35 @@ namespace {
         // Ensure the view covers the whole window
         ::g_window->setView(sf::View(sf::FloatRect(0.f, 0.f, static_cast<float>(winSize.x), static_cast<float>(winSize.y))));
     }
+
+    static uint8_t button_for_key(const ui::PlayerKeys& keys, sf::Keyboard::Key key) {
+        if (key == keys.up) return ui::UP;
+        if (key == keys.down) return ui::DOWN;
+        if (key == keys.left) return ui::LEFT;
+        if (key == keys.right) return ui::RIGHT;
+        if (key == keys.a) return ui::A;
+        if (key == keys.b) return ui::B;
+        if (key == keys.select) return ui::SELECT;
+        if (key == keys.start) return ui::START;
+        return 0;
+    }
+
+    static void update_controller_state(console& emu, int player, uint8_t mask, bool pressed) {
+        uint8_t state;
+        if (mask == 0) return;
+
+        if (player == 1) {
+            state = emu.get_mem().get_controller1();
+            state = pressed ? static_cast<uint8_t>(state | mask)
+                            : static_cast<uint8_t>(state & static_cast<uint8_t>(~mask));
+            emu.get_mem().set_controller1(state);
+        } else {
+            state = emu.get_mem().get_controller2();
+            state = pressed ? static_cast<uint8_t>(state | mask)
+                            : static_cast<uint8_t>(state & static_cast<uint8_t>(~mask));
+            emu.get_mem().set_controller2(state);
+        }
+    }
 }
 
 namespace ui {
@@ -64,6 +95,8 @@ namespace ui {
     }
 
     bool init() {
+        // load keybinds from file; creates keybinds.ini with defaults if missing
+        ::g_keybinds = ui::KeyBinds::load_or_create("keybinds.ini");
         try {
             ::g_window = new sf::RenderWindow(
                 sf::VideoMode(FB_WIDTH * SCALE, FB_HEIGHT * SCALE),
@@ -121,62 +154,16 @@ namespace ui {
     }
 
     void process_input(sf::Event& event, console& emu) {
-        // check if event is a keyboard event
         if (event.type != sf::Event::KeyPressed && event.type != sf::Event::KeyReleased)
             return;
-        
-        // is key pressed
+
         bool pressed = (event.type == sf::Event::KeyPressed);
-        // temp container for nes button bit
-        uint8_t mask = 0;
+        sf::Keyboard::Key k = event.key.code;
+        uint8_t p1_mask = button_for_key(::g_keybinds.p1, k);
+        uint8_t p2_mask = button_for_key(::g_keybinds.p2, k);
 
-        // map of nes controller bits
-        switch (event.key.code) {
-            case sf::Keyboard::Z: {
-                mask = A;
-                break;
-            }
-            case sf::Keyboard::X: {
-                mask = B;
-                break;
-            }
-            case sf::Keyboard::RShift: {
-                mask = SELECT;
-                break;
-            }
-            case sf::Keyboard::Enter: {
-                mask = START;
-                break;
-            }
-            case sf::Keyboard::Up: {
-                mask = UP;
-                break;
-            }
-            case sf::Keyboard::Down: {
-                mask = DOWN;
-                break;
-            }
-            case sf::Keyboard::Left: {
-                mask = LEFT;
-                break;
-            }
-            case sf::Keyboard::Right: {
-                mask = RIGHT;
-                break;
-            }
-            default:
-                return; // not a gameplay key
-        }
-
-        // check if a key is pressed
-        if (pressed) {
-            emu.get_mem().set_controller1(emu.get_mem().get_controller1() | mask);
-            // console output
-            std::printf("Button Pressed: %02X | Current State: %02X\n", mask, emu.get_mem().get_controller1());
-        }
-        else {
-            emu.get_mem().set_controller1(emu.get_mem().get_controller1() & ~mask);
-        }
+        update_controller_state(emu, 1, p1_mask, pressed);
+        update_controller_state(emu, 2, p2_mask, pressed);
     }
     
     bool step(console& emu, bool& is_running) {
@@ -195,77 +182,46 @@ namespace ui {
                 ::g_window->close();
                 return false;
             }
-            // Handle keyboard input for controlling the emulator
-            // Space - toggle pause/resume
-            // S - step one frame
-            // R - reset emulator
-            // F - toggle fullscreen
-            // L - load ROM
-            auto tppe = event.type;
-            if (event.type == sf::Event::KeyPressed){
-                switch (event.key.code)
-                {
-                    case sf::Keyboard::Escape:
+            if (event.type == sf::Event::KeyPressed) {
+                const ui::EmuKeys& ek = ::g_keybinds.emu; // emulator hotkeys loaded from keybinds.ini
+                sf::Keyboard::Key k = event.key.code;
+
+                if (k == ek.quit) {
+                    is_running = false;
+                    ::g_window->close();
+                    return false;
+                } else if (k == ek.pause && emu.rom_loaded()) {
+                    is_running = !is_running;
+                    std::fprintf(stderr, is_running ? "Resuming emulation\n" : "Pausing emulation\n");
+                } else if (k == ek.step_frame && emu.rom_loaded()) {
+                    std::fprintf(stderr, "Stepping one frame\n");
+                    emu.step(1);
+                } else if (k == ek.reset && emu.rom_loaded()) {
+                    std::fprintf(stderr, "Resetting emulator\n");
+                    emu.reset_all();
+                    is_running = false;
+                } else if (k == ek.fullscreen && emu.rom_loaded()) {
+                    std::fprintf(stderr, "Toggling fullscreen\n");
+                    if (::g_fullscreen)
+                        ::g_window->create(sf::VideoMode(FB_WIDTH * SCALE, FB_HEIGHT * SCALE), "NES Emulator", sf::Style::Default);
+                    else
+                        ::g_window->create(sf::VideoMode::getDesktopMode(), "NES Emulator", sf::Style::Fullscreen);
+                    ::g_window->setFramerateLimit(60);
+                    ::g_fullscreen = !::g_fullscreen;
+                    update_view();
+                } else if (k == ek.load_rom) {
+                    if (emu.rom_loaded()) {
+                        std::fprintf(stderr, "Unloading current ROM\n");
+                        emu.reset_all();
                         is_running = false;
-                        ::g_window->close();
-                        return false;
-                        break;
-                    case sf::Keyboard::Space:
-                        if (emu.rom_loaded()) {
-                            if (!is_running) {
-                                std::fprintf(stderr, "Resuming emulation\n");
-                            } else {
-                                std::fprintf(stderr, "Pausing emulation\n");
-                            }
-                            is_running = !is_running;
-                        }
-                        break;
-                    case sf::Keyboard::S:
-                        if (emu.rom_loaded()) {
-                            std::fprintf(stderr, "Stepping one frame\n");
-                            emu.step(1);
-                        }
-                        break;
-                    case sf::Keyboard::R:
-                        if (emu.rom_loaded()) {
-                            std::fprintf(stderr, "Resetting emulator\n");
-                            emu.reset_all();
-                            is_running = false;
-                        }
-                        break;
-                    case sf::Keyboard::F:
-                        if (emu.rom_loaded()) {
-                            std::fprintf(stderr, "Toggling fullscreen\n");
-                            if (::g_fullscreen) {
-                                ::g_window->create(sf::VideoMode(FB_WIDTH * SCALE, FB_HEIGHT * SCALE), "NES Emulator", sf::Style::Default);
-                            } else {
-                                ::g_window->create(sf::VideoMode::getDesktopMode(), "NES Emulator", sf::Style::Fullscreen);
-                            }
-                            // Reapply settings for the new window
-                            ::g_window->setFramerateLimit(60);
-                            ::g_fullscreen = !::g_fullscreen;
-                            update_view();
-                        }
-                        break;
-                    case sf::Keyboard::L:{
-                        if (emu.rom_loaded()) {
-                            // unload rom
-                            std::fprintf(stderr, "Unloading current ROM\n");
-                            emu.reset_all();
-                            is_running = false;
-                        }
-                        // add file select menu
-                        std::string filePath = openFileDialog();
-                        if (!filePath.empty()) {
-                            std::fprintf(stderr, "Loading ROM: %s\n", filePath.c_str());
-                            emu.load_rom(filePath.c_str());
-                            init_audio(emu);
-                            is_running = true;
-                        }
                     }
-                        break;
-                    default:
-                        break;
+                    std::string filePath = openFileDialog();
+                    if (!filePath.empty()) {
+                        std::fprintf(stderr, "Loading ROM: %s\n", filePath.c_str());
+                        emu.load_rom(filePath.c_str());
+                        init_audio(emu);
+                        is_running = true;
+                    }
                 }
             }
         }

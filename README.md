@@ -3,7 +3,7 @@ A cross-platform NES emulator built as part of the OSU CS-461/462 Capstone proje
 
 
 ## Current Status
-The project is under active development. Core system scaffolding is in place, with CPU, memory, and ROM loading under implementation. Rendering and input are handled through SDL2.
+The project is under active development. Core system scaffolding is in place, with CPU, memory, and ROM loading under implementation. Rendering and input are handled through SFML.
 
 ## Repository Structure
 ```text
@@ -18,13 +18,13 @@ build/          Out-of-source build artifacts
 - **Memory** – NES memory map and mirroring
 - **PPU** – Graphics pipeline and framebuffer
 - **ROM Loader** – iNES parsing and PRG/CHR mapping
-- **Input** – NES controller state via SDL events
+- **Input** – NES controller state via SFML events
 
 
 ## Tech
 - **Language:** C++20
 - **Build:** CMake (+ Makefile shim)
-- **Window/Input/Rendering:** SDL2
+- **Window/Input/Rendering:** SFML
 - **CI:** GitHub Actions (Linux/macOS/Windows)
 - **Tests:** basic test harness for build validation (functional tests in progress)
 
@@ -32,7 +32,7 @@ build/          Out-of-source build artifacts
 
 ### macOS
 ```bash
-brew install sdl2 cmake googletest sfml@2
+brew install cmake googletest sfml@2
 make build
 make run
 make test
@@ -40,7 +40,7 @@ make test
 
 ### Ubuntu/Debian
 ```bash
-sudo apt-get update && sudo apt-get install -y libsdl2-dev cmake g++ libgtest-dev libgmock-dev libsfml-dev
+sudo apt-get update && sudo apt-get install -y cmake g++ libgtest-dev libgmock-dev libsfml-dev
 sudo cmake -S /usr/src/googletest -B /tmp/build-gtest
 sudo cmake --build /tmp/build-gtest --config Release
 sudo cmake --install /tmp/build-gtest
@@ -55,7 +55,7 @@ PowerShell:
 cd C:\
 git clone https://github.com/microsoft/vcpkg.git
 C:\vcpkg\bootstrap-vcpkg.bat
-C:\vcpkg\vcpkg install sdl2:x64-windows gtest:x64-windows
+C:\vcpkg\vcpkg install sfml:x64-windows gtest:x64-windows
 C:\vcpkg\vcpkg integrate install
 Switch to local project directory
 choco install -y cmake
@@ -70,6 +70,59 @@ cmake --build build --config Release
 
 ## Running ROMs
 ROM loading is under active development. At this stage, the emulator validates the toolchain and core system scaffolding but does not yet fully execute commercial NES ROMs.
+
+## Controls
+
+Default keyboard layout keeps the original single-player controls on player 1 and adds a second keyboard layout for player 2.
+
+Player 1 uses the original controls:
+- Movement: arrow keys
+- `A` button: `Z`
+- `B` button: `X`
+- `Select`: `Right Shift`
+- `Start`: `Return`
+
+Player 2 uses the alternate controls:
+- Movement: `W`, `A`, `S`, `D`
+- `A` button: `F`
+- `B` button: `G`
+- `Select`: `Left Shift`
+- `Start`: `Tab`
+
+Emulator hotkeys:
+- Pause/resume: `Space`
+- Step one frame: `F2`
+- Reset: `R`
+- Toggle fullscreen: `F11`
+- Load ROM: `O`
+- Quit: `Escape`
+
+## Changing Key Bindings
+
+On first launch, the emulator creates `keybinds.ini` in the working directory. Edit that file and restart the emulator to apply changes.
+
+The file has three sections:
+- `[player1]` for controller 1
+- `[player2]` for controller 2
+- `[emulator]` for emulator hotkeys
+
+Example:
+
+```ini
+[player1]
+up     = Up
+down   = Down
+left   = Left
+right  = Right
+a      = Z
+b      = X
+select = RShift
+start  = Return
+```
+
+Use SFML key names such as `A`, `Space`, `Return`, `LShift`, `Comma`, `Period`, `Up`, or `F11`.
+
+Each action must have a unique key. If the same key is assigned to more than one action, the later conflicting entry is reset to its default binding when the file is loaded.
 
 
 ## Contributing
