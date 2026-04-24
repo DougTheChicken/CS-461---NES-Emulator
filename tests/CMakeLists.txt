@@ -93,17 +93,29 @@ add_executable(timing_tests
 target_link_libraries(timing_tests PRIVATE nes_lib GTest::gtest_main)
 target_include_directories(timing_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
 
-add_executable(ui_tests
-        ui/ui_tests.cpp
-)
-target_link_libraries(ui_tests PRIVATE nes_lib nes_ui GTest::gtest_main)
-target_include_directories(ui_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
+# Conditionally register UI tests only when a display is available
+if(NOT HEADLESS_MODE)
+    add_executable(ui_tests
+            ui/ui_tests.cpp
+    )
+    target_link_libraries(ui_tests PRIVATE nes_lib nes_ui GTest::gtest_main)
+    target_include_directories(ui_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
 
-add_executable(audio_tests
-        ui/audio_tests.cpp
-)
-target_link_libraries(audio_tests PRIVATE nes_lib nes_ui GTest::gtest_main)
-target_include_directories(audio_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
+    gtest_discover_tests(ui_tests
+            DISCOVERY_TIMEOUT 10
+            PROPERTIES SKIP_REGULAR_EXPRESSION "Fixture_Constructor|Fixture_Destructor"
+    )
+
+    # these depend on ui
+    add_executable(audio_tests
+            ui/audio_tests.cpp
+    )
+    target_link_libraries(audio_tests PRIVATE nes_lib nes_ui GTest::gtest_main)
+    target_include_directories(audio_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
+    gtest_discover_tests(audio_tests)
+else()
+    message(STATUS "Skipping UI tests in headless mode")
+endif()
 
 add_executable(tests
         test_sanity.cpp
@@ -126,6 +138,4 @@ gtest_discover_tests(mem_tests)
 gtest_discover_tests(ppu_tests)
 gtest_discover_tests(apu_tests)
 gtest_discover_tests(timing_tests)
-gtest_discover_tests(ui_tests)
-gtest_discover_tests(audio_tests)
 gtest_discover_tests(tests)

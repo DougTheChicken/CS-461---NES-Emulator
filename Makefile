@@ -1,10 +1,15 @@
 BUILD_DIR := build
+CMAKE_FLAGS := -DBUILD_TESTING=ON
+ifdef HEADLESS_MODE
+CMAKE_FLAGS += -DHEADLESS_MODE=$(HEADLESS_MODE)
+endif
+
 .PHONY: all build run test clean
 
 all: build
 
 build:
-	cmake -S . -B $(BUILD_DIR) -DBUILD_TESTING=ON
+	cmake -S . -B $(BUILD_DIR) $(CMAKE_FLAGS)
 	cmake --build $(BUILD_DIR) -j
 
 run: build
