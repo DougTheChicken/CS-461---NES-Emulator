@@ -54,6 +54,7 @@ target_include_directories(nes_lib
 add_library(nes_ui STATIC
         ${PROJECT_SOURCE_DIR}/src/ui/ui.cpp
         ${PROJECT_SOURCE_DIR}/src/ui/audio.cpp
+        ${PROJECT_SOURCE_DIR}/src/ui/keybinds.cpp
 )
 target_include_directories(nes_ui
         PUBLIC
@@ -95,28 +96,27 @@ elseif(APPLE)
     target_link_libraries(nes_ui PUBLIC "-framework AppKit")
 endif()
 
-# Silence warning only for NFD sources (GNU/Clang only)
-set_source_files_properties(${NFD_SOURCES} PROPERTIES
-        COMPILE_FLAGS "$<$<C_COMPILER_ID:GNU,Clang>:-Wno-format-truncation>"
-)
+# Silence warnings only for NFD third-party sources
+if(APPLE)
+    set_source_files_properties(${NFD_SOURCES} PROPERTIES
+            COMPILE_FLAGS "-Wno-deprecated-declarations"
+    )
+elseif(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    set_source_files_properties(${NFD_SOURCES} PROPERTIES
+            COMPILE_FLAGS "-Wno-format-truncation"
+    )
+endif()
 
-# Link UI target with SFML, nes_lib and gtest
-target_link_libraries(nes_ui PUBLIC sfml-graphics sfml-window sfml-system sfml-audio nes_lib GTest::gtest_main GTest::gtest)
+# Link UI target with SFML, emulator core, and gtest
+target_link_libraries(nes_ui PUBLIC sfml-graphics sfml-window sfml-system sfml-audio GTest::gtest_main GTest::gtest)
+target_link_libraries(nes_ui PRIVATE nes_lib)
 if(TGUI_FOUND)
     target_link_libraries(nes_ui PUBLIC TGUI::TGUI)
 endif()
 
-# ---- Executable with main.cpp; link SDL, and UI ----
-add_executable(nes_emu ${PROJECT_SOURCE_DIR}/src/main.cpp
-        include/nes/ppu.hpp
-        include/nes/component.hpp
-        include/nes/timing.hpp
-        include/nes/apu.hpp
-        src/nes/ROM.cpp
-        src/nes/apu.cpp
-        src/nes/ppu.cpp
-)
-target_link_libraries(nes_emu PRIVATE nes_lib nes_ui)
+# ---- Executable with main.cpp; link emulator core and UI ----
+add_executable(nes_emu ${PROJECT_SOURCE_DIR}/src/main.cpp)
+target_link_libraries(nes_emu PRIVATE nes_ui)
 
 # ---- Tests ----
 option(BUILD_TESTING "Build tests" ON)
