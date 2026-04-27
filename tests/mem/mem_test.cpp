@@ -1,6 +1,7 @@
 #include "nes/apu.hpp"
 #include "nes/mem.hpp"
 #include "nes/ppu.hpp"
+#include "nes/ROM.hpp"
 
 #include <gtest/gtest.h>
 
@@ -75,8 +76,12 @@ TEST_F(BusFixture, CartridgePrgMappingReadsThroughMapper) {
     prg[0x3FFC] = 0x34;
     prg[0x3FFD] = 0x12;
 
-    mem.set_mapper(std::make_shared<nes::Mapper_000>(1, 1));
-    mem.map_prg(prg.data(), prg.size());
+    nes::ROM cartridge;
+    cartridge.load_test_data(
+        std::vector<uint8_t>(prg.begin(), prg.end()),
+        std::make_shared<nes::Mapper_000>(1, 1)
+    );
+    mem.insert_cartridge(&cartridge);
 
     EXPECT_EQ(mem.read(0x8000), 0x11);
     EXPECT_EQ(mem.read(0xFFFC), 0x34);

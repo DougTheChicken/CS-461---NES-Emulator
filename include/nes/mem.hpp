@@ -8,7 +8,7 @@ namespace nes {
 // forward declarations
 class PPU;
 class APU;
-class Mapper;
+class ROM;
 
 class Memory {
 public:
@@ -18,8 +18,7 @@ public:
     uint8_t read(uint16_t addr);
     void write(uint16_t addr, uint8_t value);
 
-    // Map PRG ROM into $8000-$FFFF. For NROM, either 16KB mirrored or 32KB.
-    void map_prg(const uint8_t* prg_data, std::size_t prg_size);
+    void insert_cartridge(ROM* cart) { cartridge = cart; }
 
     // Update physical button state.
     // If strobe is active, it continuously loads into the shift register.
@@ -31,9 +30,6 @@ public:
         controller2 = v;
         if (strobe) controller2_shift = v;
     }
-
-    // allows console to pass mapper to memory bus
-    void set_mapper(std::shared_ptr<Mapper> m);
 
     // Reset memory-mapped state back to a known state (does not modify ROM bytes)
     void reset();
@@ -49,9 +45,8 @@ private:
     // Internal RAM ($0000-$07FF), mirrored to $1FFF
     uint8_t ram[0x800]{};
 
-    // PRG ROM bytes (owned by ROM)
-    const uint8_t* prg = nullptr;
-    std::size_t prg_size_bytes = 0;
+    // --- NEW CARTRIDGE INTERFACE ---
+    ROM* cartridge = nullptr;
 
     // Controller registers (placeholders)
     uint8_t controller1 = 0;
@@ -60,12 +55,13 @@ private:
     // PPU/APU references
     PPU& ppu; // rely on forward declarations of PPU
     APU& apu; // and APU so we only store a pointer to them
+
     // Internal shift registers (read by the CPU bit-by-bit)
     uint8_t controller1_shift = 0;
     uint8_t controller2_shift = 0;
 
-	// Strobe state for controllers (bit 0 of $4016)
-	bool strobe = false;
+    // Strobe state for controllers (bit 0 of $4016)
+    bool strobe = false;
 
     // PPU/APU registers (placeholders)
     uint8_t ppu_regs[8]{};
@@ -76,8 +72,6 @@ private:
 
     // Open bus returns whatever was last read successfully
     uint8_t open_bus = 0;
-
-    std::shared_ptr<Mapper> mapper = nullptr;
 };
 
 } // namespace nes

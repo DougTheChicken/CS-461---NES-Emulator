@@ -35,6 +35,15 @@ namespace nes {
         const bool nametable_arrangement() const { return nametable_arrangement_; }
         uint8_t mapper() const { return mapper_id; }
         bool is_loaded() const { return parsed; }
+        bool cpuRead(uint16_t addr, uint8_t& data);
+        bool cpuWrite(uint16_t addr, uint8_t data);
+        bool ppuRead(uint16_t addr, uint8_t& data);
+        bool ppuWrite(uint16_t addr, uint8_t data);
+        uint8_t mirrorMode();
+        void load_test_data(const std::vector<uint8_t>& prg, std::shared_ptr<Mapper> mapper) {
+            PRG_data = prg;
+            mapper_ptr = mapper;
+        }
 
     private:
         bool parsed = false;

@@ -2,6 +2,7 @@
 #include "nes/mem.hpp"
 #include "nes/ppu.hpp"
 #include "nes/apu.hpp"
+#include "nes/ROM.hpp"
 #include "nes/mapper/mapper_000.hpp"
 
 #include <gtest/gtest.h>
@@ -15,12 +16,15 @@ class CpuFixture : public ::testing::Test {
 protected:
     CpuFixture()
         : ppu(), apu(), mem(ppu, apu), cpu() {
-        mem.set_mapper(std::make_shared<nes::Mapper_000>(1, 1));
         cpu.attach_memory(&mem);
     }
 
     void load_program(const std::array<uint8_t, 16384>& prg) {
-        mem.map_prg(prg.data(), prg.size());
+        cartridge.load_test_data(
+            std::vector<uint8_t>(prg.begin(), prg.end()),
+            std::make_shared<nes::Mapper_000>(1, 1)
+        );
+        mem.insert_cartridge(&cartridge);
         cpu.reset();
     }
 
@@ -28,6 +32,7 @@ protected:
     nes::APU apu;
     nes::Memory mem;
     nes::CPU cpu;
+    nes::ROM cartridge;
 };
 
 TEST_F(CpuFixture, LookupInstructionReportsKnownMnemonic) {

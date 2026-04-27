@@ -20,55 +20,9 @@ bool console::load_rom(const char* filepath) {
         std::fprintf(stderr, "[console] Failed to load ROM: %s\n", filepath);
         return false;
     }
-
-    // attach mapper to memory
-    // allows cpu to use mapper for prg-rom addresses ($8000-$FFFF)
-    mem.set_mapper(rom.get_mapper());
-    mem.map_prg(rom.prg_data(), rom.prg_size_bytes());
-
-    cpu.attach_memory(&mem);
-    ppu.vertical_mirroring = rom.nametable_arrangement();
-
-    const std::size_t prg_banks = rom.prg_size_bytes() / 16384;
-    const std::size_t chr_banks = rom.chr_size_bytes() / 8192;
-
-    std::fprintf(stderr,
-        "[console] Loaded: %s | mapper=%u | PRG banks=%zu | CHR banks=%zu | PRG=%zu bytes\n",
-        filepath,
-        (unsigned)rom.mapper(),
-        prg_banks,
-        chr_banks,
-        rom.prg_size_bytes()
-    );
-
-    // uses mapper to translate ppu adresses into chr-rom / ram indices
-    ppu.set_chr_read_callback([this](uint16_t addr) -> uint8_t {
-        uint32_t mapped_addr = 0;
-        // check if active mapper from rom can handle proposed address
-        if (rom.get_mapper()->ppuMapRead(addr, mapped_addr)) {
-            return rom.chr_data()[mapped_addr];
-        }
-        return 0;
-    });
-
-    // allows writing to chr-ram if mapper permits
-    ppu.set_chr_write_callback([this](uint16_t addr, uint8_t value) {
-        uint32_t mapped_addr = 0;
-        // check if active mapper from rom can handle proposed address
-        if (rom.get_mapper()->ppuMapWrite(addr, mapped_addr)) {
-            // NOTE: rom.chr_data() returns const uint8_t*, hence the cast
-            const_cast<uint8_t*>(rom.chr_data())[mapped_addr] = value;
-        }
-    });
-
-    // Inside console::load_rom
-    ppu.set_mirror_callback([this]() -> uint8_t {
-        if (rom.get_mapper()) {
-            return rom.get_mapper()->mirrorMode();
-        }
-        return 0xFF; // Fallback to header flag
-        });
-
+    
+    mem.insert_cartridge(&rom);
+    ppu.insert_cartridge(&rom);
 
     cpu.reset();
 
@@ -190,7 +144,6 @@ void console::reset_all() {
     master_cycle_count = 0;
     cpu.reset();
     rom.reset();
-    mem.set_mapper(nullptr);
     mem.reset();
     ppu.reset();
     apu.reset();

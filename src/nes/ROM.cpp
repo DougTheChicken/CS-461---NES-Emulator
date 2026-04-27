@@ -10,6 +10,58 @@ namespace nes {
     static constexpr std::size_t PRG_BANK_SIZE      = 16 * 1024;
     static constexpr std::size_t CHR_BANK_SIZE      = 8 * 1024;
 
+    bool ROM::cpuRead(uint16_t addr, uint8_t& data) {
+        uint32_t mapped_addr = 0;
+
+        // ROM consults its internal mapper
+        if (mapper_ptr->cpuMapRead(addr, mapped_addr, data)) {
+            // If the mapper didn't handle the data directly (like Save RAM)
+            if (mapped_addr != 0xFFFFFFFF) {
+                // ROM fetches from its own private array
+                data = PRG_data[mapped_addr];
+            }
+            return true; // Successfully handled
+        }
+        return false; // Not in cartridge space
+    }
+
+    bool ROM::cpuWrite(uint16_t addr, uint8_t data) {
+        uint32_t mapped_addr = 0;
+        if (mapper_ptr->cpuMapWrite(addr, mapped_addr, data)) {
+            if (mapped_addr != 0xFFFFFFFF) {
+                // Optional: Handle PRG-RAM writes if supported
+            }
+            return true;
+        }
+        return false;
+    }
+
+    bool ROM::ppuRead(uint16_t addr, uint8_t& data) {
+        uint32_t mapped_addr = 0;
+        if (mapper_ptr->ppuMapRead(addr, mapped_addr)) {
+            data = CHR_data[mapped_addr];
+            return true;
+        }
+        return false;
+    }
+
+    bool ROM::ppuWrite(uint16_t addr, uint8_t data) {
+        uint32_t mapped_addr = 0;
+        if (mapper_ptr->ppuMapWrite(addr, mapped_addr)) {
+            CHR_data[mapped_addr] = data;
+            return true;
+        }
+        return false;
+    }
+
+    // Expose the mirroring mode directly through the ROM as well
+    uint8_t ROM::mirrorMode() {
+        if (mapper_ptr) {
+            return mapper_ptr->mirrorMode();
+        }
+        return 0xFF;
+    }
+
     // Parses the ROM file based on the iNES file format specification: https://www.nesdev.org/wiki/INES
     bool ROM::load_from_file(const char* path) {
         std::ifstream f(path, std::ios::binary);
