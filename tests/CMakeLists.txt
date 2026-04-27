@@ -102,6 +102,7 @@ if(NOT HEADLESS_MODE)
     target_include_directories(ui_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests)
 
     gtest_discover_tests(ui_tests
+            DISCOVERY_MODE PRE_TEST
             DISCOVERY_TIMEOUT 10
             PROPERTIES SKIP_REGULAR_EXPRESSION "Fixture_Constructor|Fixture_Destructor"
     )

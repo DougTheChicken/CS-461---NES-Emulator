@@ -40,6 +40,10 @@ namespace nes {
         bool ppuRead(uint16_t addr, uint8_t& data);
         bool ppuWrite(uint16_t addr, uint8_t data);
         uint8_t mirrorMode();
+        void load_test_data(const std::vector<uint8_t>& prg, std::shared_ptr<Mapper> mapper) {
+            PRG_data = prg;
+            mapper_ptr = mapper;
+        }
 
     private:
         bool parsed = false;
