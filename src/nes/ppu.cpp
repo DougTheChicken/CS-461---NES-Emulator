@@ -1,4 +1,5 @@
 #include "nes/ppu.hpp"
+#include "nes/ROM.hpp"
 #include <cstring>
 
 namespace nes {
@@ -497,8 +498,12 @@ namespace nes {
 
         if (address < 0x2000)
         {
-            if (chr_read_callback) return chr_read_callback(address);
-            return chr_ram[address]; // will we ever have CHR-RAM cart but we have no callback?
+            uint8_t data = 0;
+            // Ask the cartridge directly!
+            if (cartridge && cartridge->ppuRead(address, data)) {
+                return data;
+            }
+            return chr_ram[address]; // Fallback
         }
         // $2000 - $3EFF nametable read
         if (address < 0x3F00)
@@ -520,8 +525,11 @@ namespace nes {
 
         if (address < 0x2000)
         {
-            if (chr_write_callback) { chr_write_callback(address, value); }
-            else { chr_ram[address] = value; } // no write callback, so stick it here? does this happen?
+            // Hand the write directly to the cartridge!
+            if (cartridge && cartridge->ppuWrite(address, value)) {
+                return; // Cartridge handled it
+            }
+            chr_ram[address] = value; // Fallback
         }
         // $2000 - $3EFF nametable write
         else if (address < 0x3F00)
@@ -564,7 +572,7 @@ namespace nes {
         uint16_t physical;
 
         // Ask the cartridge for the current mode. Fallback to 0xFF if unsupported.
-        uint8_t mode = mirror_callback ? mirror_callback() : 0xFF;
+        uint8_t mode = cartridge ? cartridge->mirrorMode() : 0xFF;
 
         switch (mode) {
         case 0: physical = 0; break;          // One-Screen Lower

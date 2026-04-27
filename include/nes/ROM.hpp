@@ -35,6 +35,11 @@ namespace nes {
         const bool nametable_arrangement() const { return nametable_arrangement_; }
         uint8_t mapper() const { return mapper_id; }
         bool is_loaded() const { return parsed; }
+        bool cpuRead(uint16_t addr, uint8_t& data);
+        bool cpuWrite(uint16_t addr, uint8_t data);
+        bool ppuRead(uint16_t addr, uint8_t& data);
+        bool ppuWrite(uint16_t addr, uint8_t data);
+        uint8_t mirrorMode();
 
     private:
         bool parsed = false;
