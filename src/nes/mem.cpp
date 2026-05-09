@@ -1,6 +1,5 @@
 #include "nes/mem.hpp"
 #include <cstring>
-#include <cstdio>
 #include "nes/apu.hpp"
 #include "nes/ppu.hpp"
 #include "nes/ROM.hpp"
