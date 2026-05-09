@@ -1,7 +1,7 @@
 #include "nes/apu.hpp"
 #include "nes/mem.hpp"
 #include <algorithm>
-#include <mutex>
+#include <cstring>
 
 namespace nes {
 
@@ -586,12 +586,17 @@ void APU::reset()
     noise.reset();
     dmc.reset();
 
-    // Flush any stale audio samples so the stream starts clean
-    // must be done after resetting the channels since they may have pending samples in the queue
-    // mutex is needed to avoid race conditions with the audio callback thread that may be draining samples at the same time
+    // Initialize and flush the sample ring buffer so the stream starts clean.
+    // This must be done after resetting the channels since they may have
+    // pending samples in the queue.
     {
-        std::lock_guard<std::mutex> lock(m_sample_mutex);
-        m_sample_queue.clear();
+        size_t cap = 1;
+        while (cap < MAX_QUEUED_SAMPLES) cap <<= 1;
+        m_sample_capacity = cap;
+        m_sample_mask = cap - 1;
+        m_sample_ring.assign(m_sample_capacity, 0);
+        m_sample_head.store(0);
+        m_sample_tail.store(0);
     }
     m_sample_accumulator = 0.0;
 }
@@ -689,9 +694,18 @@ void APU::step()
         if (s < -1.0f) s = -1.0f;
         const int16_t sample = static_cast<int16_t>(s * 32767.0f);
 
-        std::lock_guard<std::mutex> lock(m_sample_mutex);
-        if (m_sample_queue.size() < MAX_QUEUED_SAMPLES)
-            m_sample_queue.push_back(sample);
+        // Lock-free push into SPSC ring buffer.  Drop samples if the queue
+        // is already at the configured MAX_QUEUED_SAMPLES.
+        {
+            const size_t head = m_sample_head.load(std::memory_order_relaxed);
+            const size_t tail = m_sample_tail.load(std::memory_order_acquire);
+            const size_t used = head - tail;
+            if (used < MAX_QUEUED_SAMPLES)
+            {
+                m_sample_ring[head & m_sample_mask] = sample;
+                m_sample_head.store(head + 1, std::memory_order_release);
+            }
+        }
     }
 }
 
@@ -810,14 +824,23 @@ float APU::get_output() const
 
 size_t APU::drain_samples(int16_t* out, size_t count)
 {
-    std::lock_guard<std::mutex> lock(m_sample_mutex);
-    const size_t available = std::min(m_sample_queue.size(), count);
-    for (size_t i = 0; i < available; ++i)
-    {
-        out[i] = m_sample_queue.front();
-        m_sample_queue.pop_front();
-    }
-    return available;
+    const size_t head = m_sample_head.load(std::memory_order_acquire);
+    const size_t tail = m_sample_tail.load(std::memory_order_relaxed);
+    const size_t available = (head - tail);
+    const size_t to_read = std::min(available, count);
+
+    if (to_read == 0)
+        return 0;
+
+    const size_t idx = tail & m_sample_mask;
+    const size_t first = std::min(to_read, m_sample_capacity - idx);
+
+    std::memcpy(out, &m_sample_ring[idx], first * sizeof(int16_t));
+    if (to_read > first)
+        std::memcpy(out + first, &m_sample_ring[0], (to_read - first) * sizeof(int16_t));
+
+    m_sample_tail.store(tail + to_read, std::memory_order_release);
+    return to_read;
 }
 
 //                     95.88
