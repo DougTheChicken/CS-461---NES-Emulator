@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <cstddef>
 
 #include "nes/ROM.hpp"
 #include "nes/cpu.hpp"

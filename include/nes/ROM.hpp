@@ -2,7 +2,6 @@
 #include <cstdint>
 #include <cstddef>
 #include <vector>
-#include <string>
 #include <memory>
 #include "mapper/mapper_000.hpp"
 #include "mapper/mapper_001.hpp"
