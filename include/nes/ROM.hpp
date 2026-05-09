@@ -3,11 +3,7 @@
 #include <cstddef>
 #include <vector>
 #include <memory>
-#include "mapper/mapper_000.hpp"
-#include "mapper/mapper_001.hpp"
-#include "mapper/mapper_002.hpp"
-#include "mapper/mapper_003.hpp"
-#include "mapper/mapper_004.hpp"
+#include "nes/mapper/mapper.hpp"
 
 // TODO: Make the iNES ROM spec a struct and parse it in a more structured way.
 
