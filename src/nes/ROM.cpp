@@ -1,4 +1,9 @@
 #include "nes/ROM.hpp"
+#include "nes/mapper/mapper_000.hpp"
+#include "nes/mapper/mapper_001.hpp"
+#include "nes/mapper/mapper_002.hpp"
+#include "nes/mapper/mapper_003.hpp"
+#include "nes/mapper/mapper_004.hpp"
 #include <fstream>
 #include <array>
 #include <algorithm>
@@ -78,10 +83,10 @@ namespace nes {
         // Read header
         std::array<uint8_t, HEADER_SIZE> header{};
         if (!read_exact(header.data(), header.size())) return false;
-        
+
         // Validate iNES magic header
         if (!std::equal(header.begin(), header.begin() + 4, NES_MAGIC)) return false;
-    
+
         // ROM sizes (in banks)
         const std::size_t prg_bank_count = header[4];
         const std::size_t chr_bank_count = header[5];
