@@ -1,8 +1,8 @@
 #pragma once
 #include <cstdint>
 #include <cstddef>
-#include <deque>
-#include <mutex>
+#include <vector>
+#include <atomic>
 #include "nes/timing.hpp"
 
 namespace nes {
@@ -166,7 +166,6 @@ public:
 // The triangle channel has no volume control; the waveform is either
 // cycling or suspended.  It includes a linear counter for finer-grained
 // duration control than the length counter alone.
-// Timer ticks at CPU clock rate (not halved like Pulse/Noise).
 class Triangle {
 public:
     void write_register(uint8_t reg, uint8_t value);
@@ -361,9 +360,15 @@ private:
     // (very bad, horrid bugs and potential memory leaks)
     static constexpr size_t MAX_QUEUED_SAMPLES = static_cast<size_t>(AUDIO_SAMPLE_RATE);
 
+    // Lock-free single-producer single-consumer ring buffer for PCM samples.
+    // Producer (APU::step) writes samples; consumer (audio thread) calls
+    // drain_samples(). The buffer capacity is a power-of-two >= MAX_QUEUED_SAMPLES.
+    std::vector<int16_t>  m_sample_ring;
+    size_t                m_sample_capacity = 0; // power-of-two
+    size_t                m_sample_mask     = 0;
+    std::atomic<size_t>   m_sample_head{0}; // producer index (next write)
+    std::atomic<size_t>   m_sample_tail{0}; // consumer index (next read)
     double                m_sample_accumulator = 0.0;
-    std::deque<int16_t>   m_sample_queue;
-    mutable std::mutex    m_sample_mutex;
 
     uint64_t cpu_cycle     = 0;
     uint8_t  status_enable = 0;

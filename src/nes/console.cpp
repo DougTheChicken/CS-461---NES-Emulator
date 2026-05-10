@@ -1,7 +1,6 @@
 #include "nes/console.hpp"
 #include <cstdio>
 #include <cstring>
-#include <cstddef>
 
 console::console()
     : rom(),
@@ -20,7 +19,7 @@ bool console::load_rom(const char* filepath) {
         std::fprintf(stderr, "[console] Failed to load ROM: %s\n", filepath);
         return false;
     }
-    
+
     mem.insert_cartridge(&rom);
     ppu.insert_cartridge(&rom);
 

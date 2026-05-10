@@ -33,8 +33,10 @@ int main(int argc, char** argv) {
     // (e.g. 44100.8 Hz instead of 44100 Hz)
     // this fixes one of the most annoying bugs I have seen where the audio is just *slightly* wrong
     // I knew I wasn't crazy...
+    // Edit from later: turns out the CPU_HZ was a lie, we need to take the cycles from the clock directly
     double cycle_accumulator = 0.0;
-    constexpr double CYCLES_PER_FRAME = CPU_HZ / 60.0; // ~29829.54...
+    // constexpr double CYCLES_PER_FRAME = CPU_HZ / 60.0; // ~29829.54...
+    constexpr double CYCLES_PER_FRAME = static_cast<double>(PPU_CYCLES_PER_FRAME) / static_cast<double>(CPU_TO_PPU);
 
     while (ui::step(emu, is_running)) {
         if (is_running) {
@@ -50,6 +52,6 @@ int main(int argc, char** argv) {
     // Cleanup
     ui::shutdown();
     std::fprintf(stderr, "Exiting\n");
-    
+
     return 0;
 }
