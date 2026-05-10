@@ -68,4 +68,86 @@ TEST(PPUTest, VBlankFlagAppearsDuringStepAndClearsOnStatusRead) {
     EXPECT_FALSE(ppu.vblank_flag);
 }
 
+// Blargg palette_ram test coverage:
+// 1) Tests passed
+// 2) Palette read shouldn't be buffered like other VRAM
+// 3) Palette write/read doesn't work
+// 4) Palette should be mirrored within $3f00-$3fff
+// 5) Write to $10 should be mirrored at $00
+// 6) Write to $00 should be mirrored at $10
+
+static void set_ppuaddr(nes::PPU& ppu, uint16_t addr) {
+    ppu.cpu_read_register(0x2002); // clear write latch (w = false)
+    ppu.cpu_write_register(0x2006, (addr >> 8) & 0x3F);
+    ppu.cpu_write_register(0x2006, addr & 0xFF);
+}
+
+TEST(PPUPaletteRamTest, BasicWriteRead) {
+    nes::PPU ppu;
+    set_ppuaddr(ppu, 0x3F01);
+    ppu.cpu_write_register(0x2007, 0x15);
+    set_ppuaddr(ppu, 0x3F01);
+    EXPECT_EQ(ppu.cpu_read_register(0x2007), 0x15);
+}
+
+TEST(PPUPaletteRamTest, ReadIsImmediateNotBuffered) {
+    nes::PPU ppu;
+    set_ppuaddr(ppu, 0x3F05);
+    ppu.cpu_write_register(0x2007, 0x27);
+    // First read from palette address must return the palette value immediately,
+    // not the stale buffer from a prior non-palette read.
+    set_ppuaddr(ppu, 0x3F05);
+    EXPECT_EQ(ppu.cpu_read_register(0x2007), 0x27);
+}
+
+TEST(PPUPaletteRamTest, MirroredIn3F00To3FFF) {
+    nes::PPU ppu;
+    // Write to $3F01 and verify it is readable at $3F21 (and $3F41, etc.)
+    set_ppuaddr(ppu, 0x3F01);
+    ppu.cpu_write_register(0x2007, 0x25);
+    set_ppuaddr(ppu, 0x3F21);
+    EXPECT_EQ(ppu.cpu_read_register(0x2007), 0x25);
+}
+
+TEST(PPUPaletteRamTest, WriteToX10MirroredAtX00) {
+    // $3F10 (sprite bg colour) is a mirror of $3F00 (background colour 0)
+    nes::PPU ppu;
+    set_ppuaddr(ppu, 0x3F10);
+    ppu.cpu_write_register(0x2007, 0x15);
+    set_ppuaddr(ppu, 0x3F00);
+    EXPECT_EQ(ppu.cpu_read_register(0x2007), 0x15);
+}
+
+TEST(PPUPaletteRamTest, WriteToX00MirroredAtX10) {
+    // $3F00 (background colour 0) is a mirror of $3F10 (sprite bg colour)
+    nes::PPU ppu;
+    set_ppuaddr(ppu, 0x3F00);
+    ppu.cpu_write_register(0x2007, 0x20);
+    set_ppuaddr(ppu, 0x3F10);
+    EXPECT_EQ(ppu.cpu_read_register(0x2007), 0x20);
+}
+
+TEST(PPUPaletteRamTest, AllFourTransparentColoursMirror) {
+    // $3F14/$3F18/$3F1C also mirror $3F04/$3F08/$3F0C
+    nes::PPU ppu;
+
+    struct { uint16_t sprite_addr; uint16_t bg_addr; uint8_t val; } cases[] = {
+        { 0x3F14, 0x3F04, 0x11 },
+        { 0x3F18, 0x3F08, 0x22 },
+        { 0x3F1C, 0x3F0C, 0x33 },
+    };
+
+    for (auto& c : cases) {
+        set_ppuaddr(ppu, c.sprite_addr);
+        ppu.cpu_write_register(0x2007, c.val);
+        set_ppuaddr(ppu, c.bg_addr);
+        EXPECT_EQ(ppu.cpu_read_register(0x2007), c.val);
+
+        set_ppuaddr(ppu, c.bg_addr);
+        ppu.cpu_write_register(0x2007, c.val ^ 0x0F);
+        set_ppuaddr(ppu, c.sprite_addr);
+        EXPECT_EQ(ppu.cpu_read_register(0x2007), c.val ^ 0x0F);
+    }
+}
+
 } // namespace
