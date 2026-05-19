@@ -4,11 +4,12 @@
 #include "nes/console.hpp"
 #include <SFML/Graphics.hpp>
 #include <algorithm>
+#include <optional>
 
 namespace {
     sf::RenderWindow* g_window = nullptr;
     ui::KeyBinds g_keybinds = ui::KeyBinds::defaults(); // loaded from keybinds.ini on init()
-    sf::Texture g_texture;
+    std::optional<sf::Texture> g_texture;
     sf::Sprite g_sprite;
     std::unique_ptr<ui::AudioStream> g_audioStream = nullptr;
     bool g_fullscreen = false;
@@ -110,8 +111,9 @@ namespace ui {
                 return false;
             }
             
-            // Create texture for framebuffer
-            if (!::g_texture.create(FB_WIDTH, FB_HEIGHT)) {
+            // Create texture for framebuffer (requires active GL context from window)
+            ::g_texture.emplace();
+            if (!::g_texture->create(FB_WIDTH, FB_HEIGHT)) {
                 ::g_window->close();
                 delete ::g_window;
                 ::g_window = nullptr;
@@ -119,7 +121,7 @@ namespace ui {
             }
             
             // Setup sprite
-            ::g_sprite.setTexture(::g_texture);
+            ::g_sprite.setTexture(*::g_texture);
             update_view();
             
             ::g_window->setFramerateLimit(60);
@@ -228,7 +230,7 @@ namespace ui {
         
         // Update texture from framebuffer
         const uint32_t* framebuffer = emu.framebuffer();
-        ::g_texture.update((const uint8_t*)framebuffer);
+        ::g_texture->update((const uint8_t*)framebuffer);
         
         // Clear and render
         ::g_window->clear(sf::Color::Black);

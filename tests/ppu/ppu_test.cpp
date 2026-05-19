@@ -150,4 +150,106 @@ TEST(PPUPaletteRamTest, AllFourTransparentColoursMirror) {
     }
 }
 
+// Blargg sprite_ram test coverage:
+// 1) Tests passed
+// 2) Basic read/write doesn't work
+// 3) Address should increment on $2004 write
+// 4) Address should not increment on $2004 read
+// 5) Third sprite bytes should be masked with $e3 on read
+// 6) $4014 DMA copy doesn't work at all
+// 7) $4014 DMA copy should start at value in $2003 and wrap
+// 8) $4014 DMA copy should leave value in $2003 intact
+
+TEST(PPUSpriteRamTest, BasicReadWrite) {
+    nes::PPU ppu;
+    ppu.cpu_write_register(0x2003, 0x10); // OAMADDR = 16
+    ppu.cpu_write_register(0x2004, 0xAB); // write byte, addr increments to 17
+    ppu.cpu_write_register(0x2003, 0x10); // reset OAMADDR to 16
+    EXPECT_EQ(ppu.cpu_read_register(0x2004), 0xAB);
+}
+
+TEST(PPUSpriteRamTest, AddressIncrementsOnWrite) {
+    nes::PPU ppu;
+    ppu.cpu_write_register(0x2003, 0x00);
+    ppu.cpu_write_register(0x2004, 0x11);
+    ppu.cpu_write_register(0x2004, 0x22);
+    ppu.cpu_write_register(0x2003, 0x00);
+    EXPECT_EQ(ppu.cpu_read_register(0x2004), 0x11);
+    ppu.cpu_write_register(0x2003, 0x01);
+    EXPECT_EQ(ppu.cpu_read_register(0x2004), 0x22);
+}
+
+TEST(PPUSpriteRamTest, AddressDoesNotIncrementOnRead) {
+    nes::PPU ppu;
+    ppu.cpu_write_register(0x2003, 0x05);
+    ppu.cpu_write_register(0x2004, 0x77); // addr goes to 0x06
+    ppu.cpu_write_register(0x2003, 0x05); // reset to 0x05
+    ppu.cpu_read_register(0x2004);        // read — must NOT increment
+    ppu.cpu_read_register(0x2004);        // second read should see same addr
+    EXPECT_EQ(ppu.oam_address, 0x05);
+}
+
+TEST(PPUSpriteRamTest, ThirdSpriteBytesMaskedOnRead) {
+    // OAM layout per sprite: Y(0), tile(1), attr(2), X(3)
+    // Attribute byte bits 2-4 are unimplemented and must read as 0 → mask 0xE3
+    nes::PPU ppu;
+    for (int sprite = 0; sprite < 64; ++sprite) {
+        uint8_t attr_idx = static_cast<uint8_t>(sprite * 4 + 2);
+        ppu.cpu_write_register(0x2003, attr_idx);
+        ppu.cpu_write_register(0x2004, 0xFF); // write all bits set; addr increments
+        ppu.cpu_write_register(0x2003, attr_idx);
+        EXPECT_EQ(ppu.cpu_read_register(0x2004), 0xFF & 0xE3)
+            << "sprite " << sprite << " attribute byte not masked";
+        // non-attribute bytes in the same sprite should be unmasked
+        uint8_t y_idx = static_cast<uint8_t>(sprite * 4 + 0);
+        ppu.cpu_write_register(0x2003, y_idx);
+        ppu.cpu_write_register(0x2004, 0xFF);
+        ppu.cpu_write_register(0x2003, y_idx);
+        EXPECT_EQ(ppu.cpu_read_register(0x2004), 0xFF)
+            << "sprite " << sprite << " Y byte should not be masked";
+    }
+}
+
+TEST(PPUSpriteRamTest, DmaCopyBasic) {
+    nes::PPU ppu;
+    // Build a source page with recognisable values
+    uint8_t page[256];
+    for (int i = 0; i < 256; ++i) page[i] = static_cast<uint8_t>(i);
+
+    ppu.cpu_write_register(0x2003, 0x00);
+    ppu.oam_dma_execute(page);
+
+    // Spot-check a handful of bytes
+    ppu.cpu_write_register(0x2003, 0x00);
+    EXPECT_EQ(ppu.cpu_read_register(0x2004), 0x00);
+    ppu.cpu_write_register(0x2003, 0x01);
+    EXPECT_EQ(ppu.cpu_read_register(0x2004), 0x01);
+    ppu.cpu_write_register(0x2003, 0xFF);
+    EXPECT_EQ(ppu.cpu_read_register(0x2004), 0xFF);
+}
+
+TEST(PPUSpriteRamTest, DmaStartsAtOamAddrAndWraps) {
+    nes::PPU ppu;
+    uint8_t page[256];
+    for (int i = 0; i < 256; ++i) page[i] = static_cast<uint8_t>(i + 1); // 1..256 (wraps)
+
+    ppu.cpu_write_register(0x2003, 0x10); // start at byte 16
+    ppu.oam_dma_execute(page);
+
+    // page[0] (value 1) lands at oam[0x10]
+    ppu.cpu_write_register(0x2003, 0x10);
+    EXPECT_EQ(ppu.cpu_read_register(0x2004), page[0]);
+    // page[0xF0] (value 0xF1) lands at oam[0x00] after the wrap
+    ppu.cpu_write_register(0x2003, 0x00);
+    EXPECT_EQ(ppu.cpu_read_register(0x2004), page[0xF0]);
+}
+
+TEST(PPUSpriteRamTest, DmaLeavesOamAddrIntact) {
+    nes::PPU ppu;
+    uint8_t page[256] = {};
+    ppu.cpu_write_register(0x2003, 0x42);
+    ppu.oam_dma_execute(page);
+    EXPECT_EQ(ppu.oam_address, 0x42);
+}
+
 } // namespace
