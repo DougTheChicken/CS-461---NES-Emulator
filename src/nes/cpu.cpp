@@ -4,6 +4,7 @@
 #include "nes/mem.hpp"
 #include "nes/apu.hpp"
 #include "nes/ppu.hpp"
+#include "nes/ROM.hpp"
 
 namespace nes {
 
@@ -197,6 +198,14 @@ void CPU::step_to(cycle_t ppu_target, const PPU& ppu, const APU& apu)
         // If a stall is pending, CPU must stop immediately.
         if (ppu.oam_dma_pending_stall > 0 || apu.dmc.pending_stall_cycles > 0) {
             break;
+        }
+
+        // mmc3 hardware interrupt polling
+        if (mem->get_loaded_rom() != nullptr && mem->get_loaded_rom()->isIRQActive()) {
+            if (!(P & I_FLAG)) {
+                this->irq();
+                mem->get_loaded_rom()->clearIRQ();
+            }
         }
 
         const int cpu_cycles = step();

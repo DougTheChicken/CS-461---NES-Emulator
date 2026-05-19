@@ -7,10 +7,14 @@ namespace nes {
         // member initialiser using base mapper class
         : Mapper(prgBanks, chrBanks) {
             // initialise registers
-            for (int i = 0; i < 8; i++)
+            for (int i = 0; i < 8; i++) {
                 pRegister[i] = 0;
+                pCHRBank[i] = i * 0x0400;
+            }
 
-            // setup for fixed prg banks (last two)
+            // setup for prg banks
+            pPRGBank[0] = 0 * 0x2000;
+            pPRGBank[1] = 1 * 0x2000;
             pPRGBank[2] = (prgBanks *  2 - 2) * 0x2000;
             pPRGBank[3] = (prgBanks *  2 - 1) * 0x2000;
         }
@@ -18,6 +22,13 @@ namespace nes {
         // cpu mapper read
         // mapper 4 (mmc3) handles prg-rom range $8000-$FFFF
         bool Mapper_004::cpuMapRead(uint16_t addr, uint32_t &mapped_addr, uint8_t &data) {
+            // intercept prg-ram reads
+            if (addr >= 0x6000 && addr <= 0x7FFF) {
+                data = prg_ram[addr & 0x1FFF];
+                mapped_addr = 0xFFFFFFFF;
+                return true;
+            }
+            
             // check range
             if (addr >= 0x8000 && addr <= 0xFFFF) {
                 // divide range into 4 slots of 8 kb (0x2000)
@@ -33,6 +44,12 @@ namespace nes {
         // cpu mapper write
         // mapper 4 (mmc3) handles complex bank switching
         bool Mapper_004::cpuMapWrite(uint16_t addr, uint32_t &mapped_addr, uint8_t data) {
+            // intercept prg-ram writes
+            if (addr >= 0x6000 && addr <= 0x7FFF) {
+                prg_ram[addr & 0x1FFF] = data;
+                return true;
+            }
+            
             // check range
             if (addr >= 0x8000 && addr <= 0x9FFF) {
                 // check address parity
@@ -47,32 +64,36 @@ namespace nes {
                 }
 
                 // update chr banks
+                // bitmasks
+                uint32_t pgr_mask = (prgBanks * 2) - 1;
+                uint32_t chr_mask = (chrBanks == 0) ? 7 : (chrBanks * 8) - 1;
+
                 // determine offset
                 int offset = bCHRInversion ? 4 : 0;
 
                 // 2 kb banks (r0 & r1)
-                pCHRBank[(0 + offset) % 8] = (pRegister[0] & 0xFE) * 0x0400;
-                pCHRBank[(1 + offset) % 8] = (pRegister[0] | 0x01) * 0x0400;
-                pCHRBank[(2 + offset) % 8] = (pRegister[1] & 0xFE) * 0x0400;
-                pCHRBank[(3 + offset) % 8] = (pRegister[1] | 0x01) * 0x0400;
+                pCHRBank[(0 + offset) % 8] = ((pRegister[0] & 0xFE) & chr_mask) * 0x0400;
+                pCHRBank[(1 + offset) % 8] = ((pRegister[0] | 0x01) & chr_mask) * 0x0400;
+                pCHRBank[(2 + offset) % 8] = ((pRegister[1] & 0xFE) & chr_mask) * 0x0400;
+                pCHRBank[(3 + offset) % 8] = ((pRegister[1] | 0x01) & chr_mask) * 0x0400;
 
                 // 1 kb banks (r2 - r5)
-                pCHRBank[(4 + offset) % 8] = pRegister[2] * 0x0400;
-                pCHRBank[(5 + offset) % 8] = pRegister[3] * 0x0400;
-                pCHRBank[(6 + offset) % 8] = pRegister[4] * 0x0400;
-                pCHRBank[(7 + offset) % 8] = pRegister[5] * 0x0400;
+                pCHRBank[(4 + offset) % 8] = (pRegister[2] & chr_mask) * 0x0400;
+                pCHRBank[(5 + offset) % 8] = (pRegister[3] & chr_mask) * 0x0400;
+                pCHRBank[(6 + offset) % 8] = (pRegister[4] & chr_mask) * 0x0400;
+                pCHRBank[(7 + offset) % 8] = (pRegister[5] & chr_mask) * 0x0400;
 
                 // update prg banks
                 if (bPRGBankMode) {
                     pPRGBank[0] = (prgBanks * 2 - 2) * 0x2000;
-                    pPRGBank[2] = pRegister[6] * 0x2000;
+                    pPRGBank[2] = (pRegister[6] & pgr_mask) * 0x2000;
                 } else {
-                    pPRGBank[0] = pRegister[6] * 0x2000;
+                    pPRGBank[0] = (pRegister[6] & pgr_mask) * 0x2000;
                     pPRGBank[2] = (prgBanks * 2 - 2) * 0x2000;
                 }
-                pPRGBank[1] = pRegister[7] * 0x2000;
+                pPRGBank[1] = (pRegister[7] & pgr_mask) * 0x2000;
                 
-                return false;
+                return true;
             }
 
             // check range
@@ -84,7 +105,7 @@ namespace nes {
                     nMirrorMode = (data & 0x01);
                 }
 
-                return false;
+                return true;
             }
 
             // check range
@@ -98,7 +119,7 @@ namespace nes {
                     bIRQReload = true;
                 }
 
-                return false;
+                return true;
             }
 
             // check range
@@ -113,7 +134,7 @@ namespace nes {
                     bIRQEnable = true;
                 }
 
-                return false;
+                return true;
             }
 
             // if outside range, don't allow cpu to write
@@ -142,7 +163,8 @@ namespace nes {
             if (addr >= 0x0000 && addr <= 0x1FFF) {
                 // chr-ram check
                 if (chrBanks == 0) {
-                    mapped_addr = addr;
+                    int slot = addr / 0x0400;
+                    mapped_addr = pCHRBank[slot] + (addr & 0x03FF);
                     return true;
 				}
             }
@@ -180,6 +202,8 @@ namespace nes {
 
         // checks the current hardware mirroring mode
         uint8_t Mapper_004::mirrorMode() {
-            return nMirrorMode;
+            // map 0 -> 2 (vertical)
+            // map 1 -> 3 (horizontal)
+            return nMirrorMode + 2;
         }
 } // namespace nes

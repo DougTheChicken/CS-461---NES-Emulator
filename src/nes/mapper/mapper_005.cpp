@@ -8,7 +8,7 @@ namespace nes {
         : Mapper(prgBanks, chrBanks) {
             // set banks
             for (int i = 0; i < 5; i++) {
-                nPRGBank[i] = (prgBanks * 2) - 1;
+                nPRGBank[i] = (prgBanks * 2 - 1);
             }
         }
 
@@ -18,7 +18,8 @@ namespace nes {
             if (addr == 0x5204) {
                 data = (bIRQPending ? 0x80 : 0x00) | (bInFrame ? 0x40 : 0x00);
                 bIRQPending = false;
-                return false;
+                mapped_addr = 0xFFFFFFFF;
+                return true;
             }
 
             // check range - hardware multipier regs
@@ -35,7 +36,8 @@ namespace nes {
                     data = product >> 8;
                 }
 
-                return false;
+                mapped_addr = 0xFFFFFFFF;
+                return true;
             }
 
             // check range - exram access
@@ -43,7 +45,8 @@ namespace nes {
                 // access internal exram
                 data = pExRAM[addr - 0x5C00];
 
-                return false;
+                mapped_addr = 0xFFFFFFFF;
+                return true;
             }
 
             // check range - prg mapping logic
@@ -51,28 +54,41 @@ namespace nes {
                 uint8_t window = 0;
                 uint32_t offset = 0;
 
+                // protection wrapping mask
+                uint32_t prg_mask = (prgBanks * 2) - 1;
+
                 // check range - window 0 ($6000-$7FFF)
                 if (addr <= 0x7FFF) {
                     offset = addr - 0x6000;
+                    uint32_t safe_bank = (nPRGBank[0] & 0x7F) & prg_mask;
+                    mapped_addr = (safe_bank * 0x2000) + offset;
+                    return true;
                 } else {
                     switch (nPRGMode) {
-                        case 0:     // 32 kb
+                        case 0: {    // 32 kb
                             window = 4; // uses reg $5117
-                            mapped_addr = ((nPRGBank[window] & ~0x03) * 0x2000) + (addr - 0x8000);
+                            uint32_t safe_b0 = (nPRGBank[window] & ~0x03) & prg_mask;
+                            mapped_addr = (safe_b0 * 0x2000) + (addr - 0x8000);
                             return true;
-                        case 1:     // 16 kb
+                        }
+                        case 1: {    // 16 kb
                             if (addr <= 0xBFFF) {
                                 window = 2;
                             } else {
                                 window = 4;
                             }
                             offset = addr & 0x3FFF;
-                            mapped_addr = ((nPRGBank[window] & ~0x01) * 0x2000) + offset;
+                            uint32_t safe_b1 = (nPRGBank[window] & ~0x01) & prg_mask;
+                            mapped_addr = (safe_b1 * 0x2000) + offset;
                             return true;
-                        case 2:     // 16 kb + 8 kb
+                        }
+                        case 2: {    // 16 kb + 8 kb
                             if (addr <= 0xBFFF) {
                                 window = 2;
                                 offset = addr & 0x3FFF;
+                                uint32_t safe_b2 = (nPRGBank[window] & ~0x01) & prg_mask;
+                                mapped_addr = (safe_b2 * 0x2000) + offset;
+                                return true;
                             } else if (addr <= 0xDFFF) {
                                 window = 3;
                                 offset = addr & 0x1FFF;
@@ -81,7 +97,8 @@ namespace nes {
                                 offset = addr & 0x1FFF;
                             }
                             break;
-                        case 3:     // 8 kb
+                        }
+                        case 3: {    // 8 kb
                             if (addr <= 0x9FFF) {
                                 window = 1;
                             } else if (addr <= 0xBFFF) {
@@ -93,9 +110,11 @@ namespace nes {
                             }
                             offset = addr & 0x1FFF;
                             break;
+                        }
                     }
                 }
-                mapped_addr = (nPRGBank[window] * 0x2000) + offset;
+                uint32_t safe_bank = nPRGBank[window] & prg_mask;
+                mapped_addr = (safe_bank * 0x2000) + offset;
 
                 return true;
             }
@@ -182,6 +201,7 @@ namespace nes {
                         break;
                     case 0x5204:
                         bIRQEnable = (data & 0x80);
+                        bIRQPending = false; 
                         break;
 
                     // hardware multiplier
@@ -193,14 +213,15 @@ namespace nes {
                         break;
                 }
 
-                // reg writes don't go to rom
-                return false;                
+                mapped_addr = 0xFFFFFFFF;
+                return true;                
             }
 
             // check range - exram ($5C00 - $5FFF)
             if (addr >= 0x5C00 && addr <= 0x5FFF && nExRAMMode <= 2) {
                 pExRAM[addr - 0x5C00] = data;
-                return false;
+                mapped_addr = 0xFFFFFFFF;
+                return true;
             }
 
             // check range - prg-ram/rom ($6000 - $FFFF)
@@ -262,7 +283,12 @@ namespace nes {
                 }
 
                 // set bank set
-                uint32_t bank = pCHRBank[window + (nLastCHRSet * 8)];
+                uint32_t bank = 0;
+                if (nLastCHRSet == 1 && window >= 8) {
+                    bank = pCHRBank[window];
+                } else {
+                    bank = pCHRBank[window % 8];
+                }
 
                 // calculate final address
                 mapped_addr = (bank * 0x0400) + (addr & 0x03FF);
@@ -324,10 +350,17 @@ namespace nes {
         }
 
         void Mapper_005::scanline() {
+            bInFrame = true;
+
             if (bInFrame) {
-                nScanlineCounter++;
-                if (nScanlineCounter == nIRQTarget) {
+                if (nScanlineCounter == (nIRQTarget - 1)) {
                     bIRQPending = true;
+                }
+
+                nScanlineCounter++;
+
+                if (nScanlineCounter >= 240) {
+                    nScanlineCounter = 0;
                 }
             }
         }

@@ -235,6 +235,15 @@ namespace nes {
             }
         }
 
+        // mmc3 & mmc5 scanline tick
+        if (rendering_enabled() && timing.is_visible_scanline()) {
+            if (timing.cycle() == 260) {
+                if (cartridge) {
+                    cartridge->clockScanline();
+                }
+            }
+        }
+
         // tick once per PPU cycle
         timing.tick(rendering_enabled());
     }

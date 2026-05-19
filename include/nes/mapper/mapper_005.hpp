@@ -21,9 +21,9 @@ namespace nes {
             bool ppuMapWrite(uint16_t addr, uint32_t &mapped_addr) override;
 
             // mapper to cpu interrupt interface
-            bool irqActive();
-            void irqClear();
-            void scanline(); // called by the ppu every scanline
+            bool irqActive() override;
+            void irqClear() override;
+            void scanline() override; // called by the ppu every scanline
             uint8_t mirrorMode() override;
 
         private:

@@ -40,6 +40,13 @@ namespace nes {
             mapper_ptr = mapper;
         }
 
+        bool isIRQActive();
+        void clearIRQ();
+        void clockScanline();
+
+        bool ppuMapReadExternal(uint16_t addr, uint32_t& mapped_addr);
+        bool ppuMapWriteExternal(uint16_t addr, uint32_t& mapped_addr);
+
     private:
         bool parsed = false;
 

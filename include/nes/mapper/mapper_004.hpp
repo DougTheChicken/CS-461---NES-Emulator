@@ -21,12 +21,14 @@ namespace nes {
             bool ppuMapWrite(uint16_t addr, uint32_t &mapped_addr) override;
 
             // mapper to cpu interrupt interface
-            bool irqActive();
-            void irqClear();
-            void scanline(); // called by the ppu every scanline
+            bool irqActive() override;
+            void irqClear() override;
+            void scanline() override; // called by the ppu every scanline
             uint8_t mirrorMode() override;
 
         private:
+            uint8_t prg_ram[0x2000]{};
+            
             // mmc3 uses a target register system
             uint8_t nTargetRegister = 0x00;
 

@@ -4,6 +4,8 @@
 #include "nes/mapper/mapper_002.hpp"
 #include "nes/mapper/mapper_003.hpp"
 #include "nes/mapper/mapper_004.hpp"
+#include "nes/mapper/mapper_005.hpp"
+#include "nes/mapper/mapper_007.hpp"
 #include <fstream>
 #include <array>
 #include <algorithm>
@@ -169,6 +171,16 @@ namespace nes {
                 break;
             }
 
+            case 5: { // MMC5
+                mapper_ptr = std::make_shared<Mapper_005>(PRG_ROM_size, CHR_ROM_size);
+                break;
+            }
+
+            case 7: { // AxROM
+                mapper_ptr = std::make_shared<Mapper_007>(PRG_ROM_size, CHR_ROM_size);
+                break;
+            }
+
             default: { // unsupported mapper
                 // say mapper failed
                 std::fprintf(stderr, "[ROM] Unsupported mapper: %u\n", mapper_id);
@@ -184,6 +196,30 @@ namespace nes {
 
         parsed = true;
         return true;
+    }
+
+    bool ROM::isIRQActive() {
+        return mapper_ptr ? mapper_ptr->irqActive() : false;
+    }
+
+    void ROM::clearIRQ() {
+        if (mapper_ptr) {
+            mapper_ptr->irqClear();
+        }
+    }
+
+    void ROM::clockScanline() {
+        if (mapper_ptr) {
+            mapper_ptr->scanline();
+        }
+    }
+
+    bool ROM::ppuMapReadExternal(uint16_t addr, uint32_t& mapped_addr) {
+        return mapper_ptr ? mapper_ptr->ppuMapRead(addr, mapped_addr) : false;
+    }
+
+    bool ROM::ppuMapWriteExternal(uint16_t addr, uint32_t& mapped_addr) {
+        return mapper_ptr ? mapper_ptr->ppuMapWrite(addr, mapped_addr) : false;
     }
 
     void ROM::reset() {
