@@ -336,6 +336,8 @@ namespace nes {
             case 0x2004:
                 {
                     value = oam[oam_address];
+                    // attribute byte (index 2 of each 4-byte sprite) has bits 2-4 unimplemented
+                    if ((oam_address & 0x03) == 2) value &= 0xE3;
                     break;
                 }
             case 0x2007:
