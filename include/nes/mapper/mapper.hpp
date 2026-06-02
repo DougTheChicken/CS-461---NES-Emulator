@@ -29,6 +29,10 @@ namespace nes {
 			// PPU Mirroring (not all mappers have to implement this, so not pure virtual)
             virtual uint8_t mirrorMode() { return 0xFF; }
 
+            virtual bool irqActive() { return false; }
+            virtual void irqClear() {}
+            virtual void scanline() {}
+
         // this is protected rather than private so other mapper handling classes
         // (i.e. nrom, mmc1, mmc3, etc.) can still see these variables and modify them
         protected:

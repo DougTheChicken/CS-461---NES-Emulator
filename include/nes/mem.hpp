@@ -34,6 +34,7 @@ public:
 
     // getter for use within cpu
     PPU& get_ppu() { return ppu; }
+    ROM* get_loaded_rom() { return cartridge; }
 
     // getters
     uint8_t get_controller1() const { return controller1; }
